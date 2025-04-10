@@ -35,7 +35,7 @@
       size += 1;                                                               \
       n /= 16;                                                                 \
     } while (n > 0);                                                           \
-    for (int i = size - 1; i >= 0; i -= 1) {                                    \
+    for (int i = size - 1; i >= 0; i -= 1) {                                   \
       VGA_display_char(buf[i]);                                                \
     }                                                                          \
     return size;                                                               \
@@ -165,10 +165,12 @@ int printk(const char *fmt, ...) {
         fmt += 1;
         printed += print_sized_long_long(va_arg(args, long long), *fmt);
         break;
+      default:
+        printed += print_char('%');
+        printed += print_char(*fmt);
       }
     } else {
-      printed += 1;
-      VGA_display_char(*fmt);
+      printed += print_char(*fmt);
     }
     fmt += 1;
   }
