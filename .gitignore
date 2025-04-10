@@ -1,0 +1,6 @@
+.env
+.cache/
+build/
+compile_commands.json
+cross/
+image/
