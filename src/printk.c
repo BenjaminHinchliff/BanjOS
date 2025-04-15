@@ -168,6 +168,7 @@ int printk(const char *fmt, ...) {
       default:
         printed += print_char('%');
         printed += print_char(*fmt);
+        break;
       }
     } else {
       printed += print_char(*fmt);
