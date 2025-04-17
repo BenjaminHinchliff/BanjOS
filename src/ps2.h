@@ -61,3 +61,5 @@ bool ps2_read_data(uint8_t *data, int timeout);
 uint8_t ps2_read_data_block();
 
 bool ps2_initialize();
+
+void ps2_echo();

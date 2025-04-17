@@ -3,6 +3,7 @@
 #include "portio.h"
 #include "ps2.h"
 
+#include <keycodes.h>
 #include <limits.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -21,7 +22,6 @@ void kmain(void) {
 
   // disable data ports
   while (true) {
-    uint8_t data = ps2_read_data_block();
-    printk("Got data: %x\n", data);
+    ps2_echo();
   }
 }

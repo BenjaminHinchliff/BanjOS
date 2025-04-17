@@ -3,6 +3,8 @@ ifneq (,$(wildcard ./.env))
     export
 endif
 
+TOOLS_DIR ?= tools
+
 AS := nasm
 CC := $(CROSS_DIR)/bin/x86_64-elf-gcc
 LD := $(CROSS_DIR)/bin/x86_64-elf-ld
@@ -41,7 +43,7 @@ LDFLAGS := -n
 
 .PHONY: run clean image build
 
-build: $(IMAGE_DIR)/$(KERNEL_EXEC) $(IMAGE_RESS)
+build: $(IMAGE_DIR)/$(KERNEL_EXEC)
 
 image: build $(IMAGE_NAME)
 
@@ -51,8 +53,8 @@ run: image
 clean:
 	rm -rf $(BUILD_DIR) $(IMAGE_DIR) $(IMAGE_NAME)
 
-$(IMAGE_NAME): build
-	sudo ./mkimg.sh $(IMAGE_NAME) $(IMAGE_DIR)
+$(IMAGE_NAME): build $(IMAGE_RESS)
+	sudo $(TOOLS_DIR)/mkimg.sh $@ $(IMAGE_DIR)
 
 $(IMAGE_DIR)/$(KERNEL_EXEC): $(OBJS)
 	@mkdir -p $(dir $@)

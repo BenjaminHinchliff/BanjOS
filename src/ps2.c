@@ -1,4 +1,5 @@
 #include "ps2.h"
+#include "keycodes.h"
 #include "portio.h"
 #include "printk.h"
 
@@ -122,11 +123,23 @@ bool ps2_initialize() {
   if (scan != PS2_DEVICE_ACK && scan != PS2_DEVICE_RESEND) {
     dprintk("Failed to request setting scan code.\n");
   }
-  ps2_send_data(0x01);
+  ps2_send_data(0x02);
   if (ps2_read_data_block() != PS2_DEVICE_ACK) {
     dprintk("Failed to set scan set.\n");
   }
 
   dprintk("Keyboard Initialized.\n");
   return true;
+}
+
+void ps2_echo() {
+  enum KeyCode code = ps2_read_data_block();
+  if (code == KEYCODE_ENTER_PRESSED) {
+    printk("\n");
+  } else {
+    char c = scan_code_to_char(code);
+    if (c != '\0') {
+      printk("%c", c);
+    }
+  }
 }
