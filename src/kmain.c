@@ -2,6 +2,7 @@
 #include "vga.h"
 #include "portio.h"
 #include "ps2.h"
+#include "interrupts.h"
 
 #include <keycodes.h>
 #include <limits.h>
@@ -19,9 +20,14 @@ void kmain(void) {
   disable_cursor();
   VGA_clear();
   ps2_initialize();
+  IRQ_init();
 
-  // disable data ports
+  asm volatile("int $0x20");
+  printk("didn't fuck anything\n");
+
+
   while (true) {
-    ps2_echo();
+    CLI;
+    asm volatile("hlt");
   }
 }

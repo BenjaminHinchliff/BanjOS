@@ -1,4 +1,5 @@
 global start
+global code
 extern long_mode_start
 
 section .text
