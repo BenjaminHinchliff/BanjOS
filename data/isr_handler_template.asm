@@ -37,6 +37,7 @@ isr_stub_%+%1:
 isr_stub_%+%1:
     push_scratch_regs
     mov rdi, %1
+    mov rsi, 0
     jmp isr_no_err
 %endmacro
 

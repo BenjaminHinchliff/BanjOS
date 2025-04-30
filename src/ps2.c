@@ -1,4 +1,5 @@
 #include "ps2.h"
+#include "interrupts.h"
 #include "keycodes.h"
 #include "portio.h"
 #include "printk.h"
@@ -58,6 +59,12 @@ uint8_t ps2_read_data_block() {
   return data;
 }
 
+void ps2_irq_handler(int num, int error_code, void *arg) {
+  uint8_t code = inb(PS2_DATA_PORT);
+  printk("keyboard handler code: %hu\n", code);
+  PIC_sendEOI(num);
+}
+
 bool ps2_initialize() {
   dprintk("Initializing keyboard...\n");
 
@@ -94,10 +101,6 @@ bool ps2_initialize() {
     return false;
   }
 
-  dprintk("Enable Port...\n");
-
-  ps2_send_command(PS2_COMMAND_ENABLE_FIRST_PORT);
-
   dprintk("Reset Device...\n");
 
   ps2_send_data(PS2_DEVICE_RESET);
@@ -129,6 +132,20 @@ bool ps2_initialize() {
   }
 
   dprintk("Keyboard Initialized.\n");
+
+  dprintk("Enable Interrupts...\n");
+  // setup the handler before actually enabling them
+  IRQ_handler_set(PS2_INTERRUPT_NUM, ps2_irq_handler, NULL);
+  // actually enable interrupts
+  config = ps2_get_controller_config();
+  config.fist_port_interrupt = true;
+  ps2_send_command(PS2_COMMAND_WRITE_BYTE_ZERO);
+  ps2_send_data(*(uint8_t *)&config);
+
+  dprintk("Enable Port...\n");
+
+  ps2_send_command(PS2_COMMAND_ENABLE_FIRST_PORT);
+
   return true;
 }
 

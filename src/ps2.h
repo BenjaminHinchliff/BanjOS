@@ -30,6 +30,8 @@
 #define PS2_READ_DATA_NO_TIMEOUT -1
 #define PS2_READ_DATA_RESONABLE_TIMEOUT 10000
 
+#define PS2_INTERRUPT_NUM 0x21
+
 struct Ps2Status {
   bool output_status : 1;
   bool input_status : 1;
