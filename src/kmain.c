@@ -1,7 +1,9 @@
 #include "interrupts.h"
 #include "portio.h"
+#include "printk.h"
 #include "ps2.h"
 #include "vga.h"
+#include "gdt.h"
 
 #include <keycodes.h>
 #include <limits.h>
@@ -21,6 +23,7 @@ void PIT_handler(int num, int error_code, void *arg) { PIC_sendEOI(num); }
 void kmain(void) {
   disable_cursor();
   VGA_clear();
+  GDT_setup();
   IRQ_init();
   ps2_initialize();
 
@@ -29,5 +32,6 @@ void kmain(void) {
   IRQ_handler_set(0x20, PIT_handler, NULL);
 
   while (true) {
+    asm volatile("hlt");
   }
 }

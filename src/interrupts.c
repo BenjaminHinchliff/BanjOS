@@ -1,14 +1,17 @@
 #include "interrupts.h"
+#include "gdt.h"
 #include "portio.h"
 #include "printk.h"
 
+#include <stdatomic.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
 
 // TODO: find a way to not have to hardcod e this
-#define GDT_OFFSET_KERNEL_CODE (1 << 3)
+#define GDT_OFFSET_KERNEL_CODE 0x08
+#define GDT_OFFSET_TSS_DESC 0x16
 #define IDT_INTERRUPT_TYPE_INTERRUPT_GATE 0xE
 
 struct IdtEntry {
@@ -35,10 +38,11 @@ struct Idtr {
 __attribute__((aligned(0x10))) static struct IdtEntry idt[IDT_MAX_DESCRIPTORS];
 static struct Idtr idtr;
 
-static void idt_set_descriptor(struct IdtEntry *descriptor, void *isr) {
+static void idt_set_descriptor(struct IdtEntry *descriptor, void *isr,
+                               uint8_t ist) {
   descriptor->isr_low = (uint64_t)isr & 0xFFFF;
   descriptor->kernel_cs = GDT_OFFSET_KERNEL_CODE;
-  descriptor->ist = 0;
+  descriptor->ist = ist;
   descriptor->reserved1 = 0;
   descriptor->type = IDT_INTERRUPT_TYPE_INTERRUPT_GATE;
   descriptor->zero = 0;
@@ -76,7 +80,6 @@ void irq_handler(int number, int error_code) {
   } else {
     entry->handler(number, error_code, entry->arg);
   }
-
   STI;
 }
 
@@ -114,11 +117,97 @@ void PIC_remap(int offset) {
   outb(PIC2_DATA, 0);
 }
 
+#define CRITICAL_STACK_SIZE 4096
+#define IST_CURRENT_STACK 0
+#define DF_INT 0x8
+#define DF_IST_IDX 1
+static uint8_t DF_stack[CRITICAL_STACK_SIZE];
+#define PF_INT 0xE
+#define PF_IST_IDX 2
+static uint8_t PF_stack[CRITICAL_STACK_SIZE];
+#define GP_INT 0xD
+#define GP_IST_IDX 3
+static uint8_t GP_stack[CRITICAL_STACK_SIZE];
+
+struct TaskStateSegment {
+  uint32_t reserved1;
+  uint64_t privilege_stack_table[3];
+  uint64_t reserved2;
+  uint64_t interrupt_stack_table[7];
+  uint64_t reserved3;
+  uint16_t reserved4;
+  uint16_t io_map_base_addr;
+} __attribute__((packed));
+
+static struct TaskStateSegment tss;
+
+struct TaskStateSegmentDescriptor {
+  uint16_t limit_low;
+  uint32_t base_low : 24;
+  uint8_t type : 4;
+  bool zero : 1;
+  uint8_t privilege : 2;
+  bool present : 1;
+  uint8_t limit_mid : 4;
+  bool available : 1;
+  uint8_t ignored : 2;
+  bool granularity : 1;
+  uint8_t base_mid;
+  uint32_t base_high;
+  uint32_t reserved;
+} __attribute__((packed));
+
+static inline void
+tss_set_descriptor(struct TaskStateSegmentDescriptor *tss_desc) {
+  uint64_t base = (uint64_t)&tss;
+  tss_desc->limit_low = sizeof(tss) - 1;
+  tss_desc->base_low = base & 0xFFFFFF;
+  tss_desc->type = 0x9;
+  tss_desc->zero = 0;
+  tss_desc->privilege = 0;
+  tss_desc->present = true;
+  tss_desc->limit_mid = 0;
+  tss_desc->available = 0;
+  tss_desc->ignored = 0;
+  tss_desc->granularity = 0;
+  tss_desc->base_mid = (base >> 24) & 0xFF;
+  tss_desc->base_high = (base >> 32) & 0xFFFFFFFF;
+  tss_desc->reserved = 0;
+}
+
+void IRQ_init_tss() {
+  memset(&tss, 0, sizeof(tss));
+  tss.interrupt_stack_table[DF_IST_IDX - 1] = (uint64_t)DF_stack;
+  tss.interrupt_stack_table[PF_IST_IDX - 1] = (uint64_t)PF_stack;
+  tss.interrupt_stack_table[GP_IST_IDX - 1] = (uint64_t)GP_stack;
+
+  struct TaskStateSegmentDescriptor tss_desc;
+  tss_set_descriptor(&tss_desc);
+  size_t tss_offset =
+      GDT_push((uint64_t *)&tss_desc, sizeof(tss_desc) / sizeof(uint64_t));
+  GDT_load();
+
+  asm volatile("ltr %0" : : "rm"(tss_offset * sizeof(uint64_t)));
+}
+
 void IRQ_init() {
   CLI;
+  IRQ_init_tss();
   PIC_remap(0x20);
   for (size_t i = 0; i < IDT_MAX_DESCRIPTORS; i += 1) {
-    idt_set_descriptor(&idt[i], isr_stub_table[i]);
+    switch (i) {
+    case DF_INT:
+      idt_set_descriptor(&idt[i], isr_stub_table[i], DF_IST_IDX);
+      break;
+    case PF_INT:
+      idt_set_descriptor(&idt[i], isr_stub_table[i], PF_IST_IDX);
+      break;
+    case GP_INT:
+      idt_set_descriptor(&idt[i], isr_stub_table[i], GP_IST_IDX);
+      break;
+    default:
+      idt_set_descriptor(&idt[i], isr_stub_table[i], 0);
+    }
   }
   idtr.base = (uintptr_t)&idt[0];
   idtr.limit = (uint16_t)sizeof(struct IdtEntry) * IDT_MAX_DESCRIPTORS - 1;
@@ -128,7 +217,7 @@ void IRQ_init() {
 
   printk("Initializing interrupts: idt limit: %hu\n", idtr.limit);
 
-  asm volatile("lidt %0" : : "m"(idtr));
+  asm volatile("lidt %0" : : "rm"(idtr));
   STI;
 }
 
