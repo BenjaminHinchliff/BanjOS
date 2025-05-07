@@ -3,6 +3,7 @@
 #include "keycodes.h"
 #include "portio.h"
 #include "printk.h"
+#include "vga.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -60,8 +61,11 @@ uint8_t ps2_read_data_block() {
 }
 
 void ps2_irq_handler(int num, int error_code, void *arg) {
-  uint8_t code = inb(PS2_DATA_PORT);
-  printk("keyboard handler code: %hu\n", code);
+  enum KeyCode code = inb(PS2_DATA_PORT);
+  char c = scan_code_to_char(code);
+  if (c != '\0') {
+    VGA_display_char(c);
+  }
   PIC_sendEOI(num);
 }
 
