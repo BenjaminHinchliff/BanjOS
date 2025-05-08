@@ -9,9 +9,6 @@
 #include <stdint.h>
 #include <string.h>
 
-// TODO: find a way to not have to hardcod e this
-#define GDT_OFFSET_KERNEL_CODE 0x08
-#define GDT_OFFSET_TSS_DESC 0x16
 #define IDT_INTERRUPT_TYPE_INTERRUPT_GATE 0xE
 
 struct IdtEntry {
@@ -41,7 +38,7 @@ static struct Idtr idtr;
 static void idt_set_descriptor(struct IdtEntry *descriptor, void *isr,
                                uint8_t ist) {
   descriptor->isr_low = (uint64_t)isr & 0xFFFF;
-  descriptor->kernel_cs = GDT_OFFSET_KERNEL_CODE;
+  descriptor->kernel_cs = GDT_kernel_desc_offset();
   descriptor->ist = ist;
   descriptor->reserved1 = 0;
   descriptor->type = IDT_INTERRUPT_TYPE_INTERRUPT_GATE;
@@ -187,7 +184,7 @@ void IRQ_init_tss() {
       GDT_push((uint64_t *)&tss_desc, sizeof(tss_desc) / sizeof(uint64_t));
   GDT_load();
 
-  asm volatile("ltr %0" : : "rm"(tss_offset * sizeof(uint64_t)));
+  asm volatile("ltr %0" : : "rm"(tss_offset));
 }
 
 void IRQ_init() {

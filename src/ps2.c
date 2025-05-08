@@ -61,11 +61,7 @@ uint8_t ps2_read_data_block() {
 }
 
 void ps2_irq_handler(int num, int error_code, void *arg) {
-  enum KeyCode code = inb(PS2_DATA_PORT);
-  char c = scan_code_to_char(code);
-  if (c != '\0') {
-    VGA_display_char(c);
-  }
+  ps2_echo();
   PIC_sendEOI(num);
 }
 

@@ -94,7 +94,7 @@ def expand_numbers(s: str) -> str:
 
 def generate_keymap(keycodes_path: str, header_path: str, source_path: str):
     with open(keycodes_path, "r") as f, open(header_path, "w") as h, open(source_path, "w") as s:
-        tsv_file = csv.reader(f, delimiter="\t")
+        tsv_file = csv.reader(f)
 
         keymap = {}
         charmap = {}
@@ -107,7 +107,7 @@ def generate_keymap(keycodes_path: str, header_path: str, source_path: str):
                     replace_special(remove_parens(name))
                 ).upper().strip().replace("-", "_").replace(" ", "_")
                 if char:
-                    charmap[codes[0]] = char
+                    charmap[keymap[codes[0]]] = char
 
         keymap = dict(sorted(keymap.items(), key=lambda e: e[0]))
         charmap = dict(sorted(charmap.items(), key=lambda e: e[0]))

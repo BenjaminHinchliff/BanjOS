@@ -22,14 +22,19 @@ struct Gdtr {
 } __attribute__((packed));
 static struct Gdtr gdtr;
 
+static size_t kernel_desc_offset = 0;
+
 static inline void lgdt(const struct Gdtr *addr) {
   asm volatile("lgdt (%0)" : : "r"(addr));
 }
 
-void GDT_push_dq(uint64_t data) { gdt.table[gdt.top++] = data; }
+size_t GDT_push_dq(uint64_t data) {
+  gdt.table[gdt.top] = data;
+  return gdt.top++ * sizeof(uint64_t);
+}
 
 size_t GDT_push(uint64_t *data, size_t len) {
-  size_t location = gdt.top;
+  size_t location = gdt.top * sizeof(uint64_t);
   for (size_t i = 0; i < len; i += 1) {
     GDT_push_dq(data[i]);
   }
@@ -42,9 +47,12 @@ void GDT_load() {
   lgdt(&gdtr);
 }
 
+size_t GDT_kernel_desc_offset() { return kernel_desc_offset; }
+
 void GDT_setup() {
   GDT_push_dq(0);
-  GDT_push_dq(DESCRIPTOR_FLAG_USER_SEGMENT | DESCRIPTOR_FLAG_PRESENT |
-              DESCRIPTOR_FLAG_EXECUTABLE | DESCRIPTOR_FLAG_LONG_MODE);
+  kernel_desc_offset =
+      GDT_push_dq(DESCRIPTOR_FLAG_USER_SEGMENT | DESCRIPTOR_FLAG_PRESENT |
+                  DESCRIPTOR_FLAG_EXECUTABLE | DESCRIPTOR_FLAG_LONG_MODE);
   GDT_load();
 }
