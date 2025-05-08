@@ -48,7 +48,7 @@ build: $(IMAGE_DIR)/$(KERNEL_EXEC)
 image: build $(IMAGE_NAME)
 
 run: image
-	qemu-system-x86_64 -s -drive format=raw,file=$(IMAGE_NAME) -serial stdio
+	qemu-system-x86_64 $(QEMUFLAGS) -s -drive format=raw,file=$(IMAGE_NAME) -serial stdio
 
 clean:
 	rm -rf $(BUILD_DIR) $(IMAGE_DIR) $(IMAGE_NAME)

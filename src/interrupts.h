@@ -45,5 +45,27 @@ static inline void PIC_sendEOI(uint8_t irq) {
 
 typedef void (*irq_handler_t)(int number, int error_code, void *arg);
 
+#define IRQ_BASE 0x20
+enum IRQLine {
+  IRQ0 = 0,
+  IRQ1 = 1,
+  IRQ2 = 2,
+  IRQ3 = 3,
+  IRQ4 = 4,
+  IRQ5 = 5,
+  IRQ6 = 6,
+  IRQ7 = 7,
+  IRQ8 = 8,
+  IRQ9 = 9,
+  IRQ10 = 10,
+  IRQ11 = 11,
+  IRQ12 = 12,
+  IRQ13 = 13,
+  IRQ14 = 14,
+  IRQ15 = 15,
+};
+
 void IRQ_init();
 void IRQ_handler_set(int number, irq_handler_t handler, void *arg);
+void IRQ_set_mask(uint8_t IRQline);
+void IRQ_clear_mask(uint8_t IRQline);

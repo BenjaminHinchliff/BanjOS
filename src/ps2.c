@@ -136,6 +136,7 @@ bool ps2_initialize() {
   dprintk("Enable Interrupts...\n");
   // setup the handler before actually enabling them
   IRQ_handler_set(PS2_INTERRUPT_NUM, ps2_irq_handler, NULL);
+  IRQ_clear_mask(IRQ1);
   // actually enable interrupts
   config = ps2_get_controller_config();
   config.fist_port_interrupt = true;

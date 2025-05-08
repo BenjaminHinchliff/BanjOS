@@ -106,7 +106,8 @@ void SER_init(void) {
   // If serial is not faulty set it in normal operation mode
   // (not-loopback with IRQs enabled and OUT#1 and OUT#2 bits enabled)
   // setup interrupts
-  IRQ_handler_set(0x24, serial_transmit_ready_handler, &ring);
+  IRQ_handler_set(IRQ_BASE + IRQ4, serial_transmit_ready_handler, &ring);
+  IRQ_clear_mask(IRQ4);
   outb(COM1 + 1, INT_ENABLE_TRANSMIT_EMPTY);
 
   outb(COM1 + 4, 0x0F);
