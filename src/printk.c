@@ -1,4 +1,5 @@
 #include "printk.h"
+#include "serial.h"
 #include "vga.h"
 
 #include <stdarg.h>
@@ -101,6 +102,7 @@ int print_percent(void) {
 
 int print_char(char c) {
   VGA_display_char(c);
+  SER_write(&c, 1);
   return 1;
 }
 

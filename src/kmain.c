@@ -2,6 +2,7 @@
 #include "portio.h"
 #include "printk.h"
 #include "ps2.h"
+#include "serial.h"
 #include "vga.h"
 #include "gdt.h"
 
@@ -25,11 +26,14 @@ void kmain(void) {
   VGA_clear();
   GDT_setup();
   IRQ_init();
-  ps2_initialize();
 
   // set up a no-op handler for the programmable interrupt timer so it doesn't
   // clog up the PIC lines
   IRQ_handler_set(0x20, PIT_handler, NULL);
+
+  SER_init();
+  ps2_initialize();
+
 
   while (true) {
     asm volatile("hlt");

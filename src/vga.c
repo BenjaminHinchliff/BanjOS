@@ -11,17 +11,9 @@ static volatile uint16_t *VGA_buf = VGA_START;
 static size_t VGA_cursor = 0;
 
 void VGA_clear(void) {
-  bool enable_ints = false;
-  if (are_interrupts_enabled()) {
-    enable_ints = true;
-    CLI;
-  }
-
+  CLI_GUARD;
   memset((uint16_t *)VGA_buf, 0x0f << 8, VGA_WIDTH * VGA_HEIGHT);
-
-  if (enable_ints) {
-    STI;
-  }
+  STI_GUARD;
 }
 
 void VGA_scroll(void) {
@@ -36,11 +28,7 @@ void VGA_scroll(void) {
 }
 
 void VGA_display_char(char c) {
-  bool enable_ints = false;
-  if (are_interrupts_enabled()) {
-    enable_ints = true;
-    CLI;
-  }
+  CLI_GUARD;
 
   if (c == '\n') {
     VGA_cursor = (LINE(VGA_cursor) + 1) * VGA_WIDTH;
@@ -58,9 +46,7 @@ void VGA_display_char(char c) {
     }
   }
 
-  if (enable_ints) {
-    STI;
-  }
+  STI_GUARD;
 }
 
 void VGA_display_str(const char *s) {

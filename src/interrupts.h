@@ -15,6 +15,18 @@ static inline bool are_interrupts_enabled() {
   return (flags & FLAGS_IF) != 0;
 }
 
+#define CLI_GUARD                                                              \
+  bool enable_ints = false;                                                    \
+  if (are_interrupts_enabled()) {                                              \
+    enable_ints = true;                                                        \
+    CLI;                                                                       \
+  }
+
+#define STI_GUARD                                                              \
+  if (enable_ints) {                                                           \
+    STI;                                                                       \
+  }
+
 #define PIC1 0x20 /* IO base address for master PIC */
 #define PIC2 0xA0 /* IO base address for slave PIC */
 #define PIC1_COMMAND PIC1
