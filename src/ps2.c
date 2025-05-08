@@ -126,7 +126,7 @@ bool ps2_initialize() {
   if (scan != PS2_DEVICE_ACK && scan != PS2_DEVICE_RESEND) {
     dprintk("Failed to request setting scan code.\n");
   }
-  ps2_send_data(0x02);
+  ps2_send_data(0x01);
   if (ps2_read_data_block() != PS2_DEVICE_ACK) {
     dprintk("Failed to set scan set.\n");
   }

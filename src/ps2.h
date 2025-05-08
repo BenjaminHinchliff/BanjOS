@@ -23,7 +23,6 @@
 #define PS2_DEVICE_RESEND 0xFE
 #define PS2_DEVICE_RESET_SUCCESS 0xAA
 
-
 #define PS2_SELF_TEST_PASS 0x55
 #define PS2_INTERFACE_PORT_PASS 0x00
 
@@ -45,6 +44,7 @@ struct Ps2Status {
 struct Ps2ControllerConfig {
   bool fist_port_interrupt : 1;
   bool second_port_interrupt : 1;
+  bool sysflag : 1;
   bool : 1;
   bool first_port_clock : 1;
   bool second_port_clock : 1;
