@@ -7,6 +7,12 @@
 #include <stdint.h>
 #include <string.h>
 
+int print_char(char c) {
+  VGA_display_char(c);
+  SER_write(&c, 1);
+  return 1;
+}
+
 #define PRINT_UNSIGNED(postfix, dtype)                                         \
   int print_unsigned_##postfix(dtype n) {                                      \
     size_t size = 0;                                                           \
@@ -17,7 +23,7 @@
       n /= 10;                                                                 \
     } while (n > 0);                                                           \
     for (int i = size - 1; i >= 0; i -= 1) {                                   \
-      VGA_display_char(buf[i]);                                                \
+      print_char(buf[i]);                                                      \
     }                                                                          \
     return size;                                                               \
   }                                                                            \
@@ -37,7 +43,7 @@
       n /= 16;                                                                 \
     } while (n > 0);                                                           \
     for (int i = size - 1; i >= 0; i -= 1) {                                   \
-      VGA_display_char(buf[i]);                                                \
+      print_char(buf[i]);                                                      \
     }                                                                          \
     return size;                                                               \
   }                                                                            \
@@ -95,20 +101,14 @@ PRINT_SIZED(short, short);
 PRINT_SIZED(long, long);
 PRINT_SIZED(long_long, long long);
 
-int print_percent(void) {
-  VGA_display_char('%');
-  return 1;
-}
-
-int print_char(char c) {
-  VGA_display_char(c);
-  SER_write(&c, 1);
-  return 1;
-}
+int print_percent(void) { return print_char('%'); }
 
 int print_string(const char *s) {
-  VGA_display_str(s);
-  return strlen(s);
+  int printed = 0;
+  while (*s != '\0') {
+    printed += print_char(*s++);
+  }
+  return printed;
 }
 
 /**

@@ -1,4 +1,5 @@
 #include "serial.h"
+#include "exit.h"
 #include "interrupts.h"
 #include "portio.h"
 #include "printk.h"
@@ -100,7 +101,7 @@ void SER_init(void) {
   // Check if serial is faulty (i.e: not same byte as sent)
   if (inb(COM1 + 0) != 0xAE) {
     printk("serial chip fault!\n");
-    return;
+    EXIT;
   }
 
   // If serial is not faulty set it in normal operation mode

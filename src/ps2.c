@@ -1,4 +1,5 @@
 #include "ps2.h"
+#include "exit.h"
 #include "interrupts.h"
 #include "keycodes.h"
 #include "portio.h"
@@ -65,7 +66,7 @@ void ps2_irq_handler(int num, int error_code, void *arg) {
   PIC_sendEOI(num);
 }
 
-bool ps2_initialize() {
+void ps2_initialize() {
   dprintk("Initializing keyboard...\n");
 
   // disable ports
@@ -93,12 +94,12 @@ bool ps2_initialize() {
   ps2_send_command(PS2_COMMAND_SELF_TEST);
   if (ps2_read_data_block() != PS2_SELF_TEST_PASS) {
     dprintk("PS2 Controller Self Test Failure. Stopping.\n");
-    return false;
+    EXIT;
   }
   ps2_send_command(PS2_COMMAND_TEST_FIRST_PORT);
   if (ps2_read_data_block() != PS2_INTERFACE_PORT_PASS) {
     dprintk("PS2 Port Test Failure. Stopping.\n");
-    return false;
+    EXIT;
   }
 
   dprintk("Reset Device...\n");
@@ -119,16 +120,19 @@ bool ps2_initialize() {
       (reset_seq[0] != PS2_DEVICE_RESET_SUCCESS ||
        reset_seq[1] != PS2_DEVICE_ACK)) {
     dprintk("PS2 Reset failure\n");
+    EXIT;
   }
 
   ps2_send_data(PS2_DEVICE_GET_SET_SCAN_CODE_SET);
   uint8_t scan = ps2_read_data_block();
   if (scan != PS2_DEVICE_ACK && scan != PS2_DEVICE_RESEND) {
     dprintk("Failed to request setting scan code.\n");
+    EXIT;
   }
   ps2_send_data(0x01);
   if (ps2_read_data_block() != PS2_DEVICE_ACK) {
     dprintk("Failed to set scan set.\n");
+    EXIT;
   }
 
   dprintk("Keyboard Initialized.\n");
@@ -146,8 +150,6 @@ bool ps2_initialize() {
   dprintk("Enable Port...\n");
 
   ps2_send_command(PS2_COMMAND_ENABLE_FIRST_PORT);
-
-  return true;
 }
 
 void ps2_echo() {

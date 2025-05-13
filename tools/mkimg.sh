@@ -31,8 +31,6 @@ mount "$PART_LOOP" "$MOUNT_POINT"
 
 grub-install --root-directory="$MOUNT_POINT" --target=i386-pc --no-floppy --modules="normal part_msdos ext2 multiboot multiboot2" "$DEV_LOOP"
 
-cp -rv "$2"/* "$MOUNT_POINT"
-
 umount "$MOUNT_POINT"
 losetup -d "$PART_LOOP"
 losetup -d "$DEV_LOOP"

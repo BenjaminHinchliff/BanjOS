@@ -1,11 +1,14 @@
 global start
-global code
+global multiboot_tag_addr
 extern long_mode_start
 
 section .text
 bits 32
 start:
     mov esp, stack_top
+
+    ;; store multiboot tag addr
+    mov [multiboot_tag_addr], ebx
 
     call check_multiboot
     call check_cpuid
@@ -153,8 +156,14 @@ gdt64:
     dw $ - gdt64 - 1
     dq gdt64
 
+section .data
+;; space to store the multiboot tag address
+multiboot_tag_addr:
+    dq 0
+
 section .bss
-align 4096
+;; align page table to 4KiB boundary, using uninitialized memory (cuz bss)
+align 4096, resb 1
 p4_table:
     resb 4096
 p3_table:

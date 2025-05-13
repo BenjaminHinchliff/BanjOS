@@ -7,7 +7,10 @@ set(INCLUDES
   "printk.h"
   "ps2.h"
   "serial.h"
-  "vga.h")
+  "vga.h"
+  "multiboot_tags.h"
+  "smolassert.h"
+  "exit.h")
 list(TRANSFORM INCLUDES PREPEND ${INCLUDE_PREFIX})
 
 set(SRCS
@@ -19,7 +22,8 @@ set(SRCS
   "ps2.c"
   "serial.c"
   "string.c"
-  "vga.c")
+  "vga.c"
+  "multiboot_tags.c")
 
 set(ASMS
   "boot.asm"
