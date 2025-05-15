@@ -30,7 +30,7 @@ void kmain(void) {
   SER_init();
   ps2_initialize();
 
-  multiboot_tags_parse();
+  multiboot_tags_parse_to_mem_regions();
 
   while (true) {
     HLT;

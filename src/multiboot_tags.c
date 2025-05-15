@@ -28,6 +28,18 @@ struct TagMemMapHeader {
   uint32_t entry_version; // should be 0
 } __attribute__((__packed__));
 
+struct TagMemMapEntry {
+  uint64_t starting_addr;
+  uint64_t length;
+  uint32_t type;
+  uint32_t : 32; // reserved
+} __attribute__((__packed__));
+
+struct TagMemMapEntries {
+  struct TagMemMapEntry *d;
+  size_t size;
+};
+
 struct TagELFHeader {
   uint32_t type; // should be 9
   uint32_t size;
@@ -41,6 +53,7 @@ struct TagELFEntry {
   uint32_t section_type;
   uint64_t flags;
   uint64_t segment_address;
+  uint64_t segment_offset;
   uint64_t segment_size;
   uint32_t table_index_link;
   uint32_t extra_info;
@@ -48,12 +61,22 @@ struct TagELFEntry {
   uint64_t fixed_entry_size_iff;
 } __attribute__((__packed__));
 
-struct TagMemMapEntry {
-  uint64_t starting_addr;
-  uint64_t length;
-  uint32_t type;
-  uint32_t : 32; // reserved
-} __attribute__((__packed__));
+struct TagElfEntries {
+  struct TagELFEntry *d;
+  size_t size;
+};
+
+struct MemRegion {
+  void *start;
+  void *end;
+  void *next;
+};
+
+#define MEM_REGIONS_LEN 16
+static struct MemRegions {
+  struct MemRegion d[MEM_REGIONS_LEN];
+  size_t size;
+} mem_regions;
 
 static bool is_tags_terminator(struct TagCommonHeader *tag) {
   return tag->type == 0 && tag->size == 8;
@@ -67,26 +90,73 @@ static uintptr_t align_pointer(uintptr_t addr, uint32_t boundary) {
   }
 }
 
-static void memmap_parse(struct TagMemMapEntry *entry, int num_entries) {
-  while (num_entries--) {
-    if (entry->type == 1) {
-      printk("%d: mem tag: type: %d length: %lx addr %lx\n", num_entries,
-             entry->type, entry->length, entry->starting_addr);
+#define MIN(a, b) (((a) < (b)) ? (a) : (b))
+#define MAX(a, b) (((a) > (b)) ? (a) : (b))
+
+static void add_region(void *start, void *end) {
+  assert(mem_regions.size < MEM_REGIONS_LEN &&
+         "Number of memory regions must fit into static regions table");
+  struct MemRegion *region = &mem_regions.d[mem_regions.size++];
+  region->start = (void *)start;
+  region->end = (void *)end;
+  region->next = (void *)start;
+}
+
+static void build_mem_regions(struct TagMemMapEntries mem_entries,
+                              struct TagElfEntries elf_entries) {
+  size_t i = 0;
+  size_t j = 0;
+  while (i < mem_entries.size) {
+    // skip over regions that aren't type 1
+    while (i < mem_entries.size && mem_entries.d[i].type != 1) {
+      ++i;
     }
-    entry++;
+    if (i == mem_entries.size) {
+      break;
+    }
+
+    uint64_t start = mem_entries.d[i].starting_addr;
+    uint64_t end = (mem_entries.d[i].starting_addr + mem_entries.d[i].length);
+
+    // skip over any disallowed regions before the allowed region
+    while (j < elf_entries.size &&
+           (elf_entries.d[j].section_type == 0 ||
+            elf_entries.d[j].segment_address + elf_entries.d[j].segment_size <=
+                start)) {
+      ++j;
+    }
+
+    uint64_t cur_start = start;
+    while (j < elf_entries.size && elf_entries.d[j].segment_address < end) {
+      if (elf_entries.d[j].segment_address > cur_start) {
+        add_region((void *)cur_start,
+                   (void *)MIN(elf_entries.d[j].segment_address, end));
+      }
+
+      cur_start = MAX(cur_start, elf_entries.d[j].segment_address +
+                                     elf_entries.d[j].segment_size);
+
+      if (cur_start >= end) {
+        break;
+      }
+
+      ++j;
+    }
+
+    if (cur_start < mem_entries.d[i].starting_addr + mem_entries.d[i].length) {
+      add_region((void *)cur_start, (void *)end);
+    }
+
+    ++i;
   }
 }
 
-static void elf_parse(struct TagELFEntry *entry, int num_entries) {
-  while (num_entries--) {
-    entry;
-    entry++;
-  }
-}
-
-void multiboot_tags_parse() {
+void multiboot_tags_parse_to_mem_regions() {
   struct TagsHeader *header = multiboot_tag_addr;
   printk("multiboot headaer size: %u\n", header->size);
+
+  struct TagMemMapEntries mem_entries;
+  struct TagElfEntries elf_entries;
   struct TagCommonHeader *curtag = (struct TagCommonHeader *)(header + 1);
   while (!is_tags_terminator(curtag)) {
     printk("found tag of type: %u, size %u\n", curtag->type, curtag->size);
@@ -96,15 +166,40 @@ void multiboot_tags_parse() {
              memheader->entry_version);
       assert(memheader->entry_size == sizeof(struct TagMemMapEntry) &&
              "Entry size must map entry struct size");
-      memmap_parse((struct TagMemMapEntry *)(memheader + 1),
-                   (memheader->size - sizeof(struct TagMemMapHeader)) /
-                       memheader->entry_size);
+      mem_entries.d = (struct TagMemMapEntry *)(memheader + 1);
+      mem_entries.size = (memheader->size - sizeof(struct TagMemMapHeader)) /
+                         memheader->entry_size;
     } else if (curtag->type == TAG_ELF_HEADER) {
       struct TagELFHeader *elfheader = (struct TagELFHeader *)curtag;
-      elf_parse((struct TagELFEntry *)(elfheader + 1), elfheader->num_entries);
+      elf_entries.d = (struct TagELFEntry *)(elfheader + 1);
+      elf_entries.size = elfheader->num_entries;
     }
     // align to next 8-byte boundary (if needed)
     curtag = (struct TagCommonHeader *)align_pointer(
         (uintptr_t)((uint8_t *)curtag + curtag->size), 8);
+  }
+
+  printk("Parsed tags mem: %lu elf: %lu\n", mem_entries.size, elf_entries.size);
+  /* for (size_t i = 0; i < mem_entries.size; ++i) { */
+  /*   struct TagMemMapEntry *e = &mem_entries.d[i]; */
+  /*   if (e->type == 1) { */
+  /*     printk("mem entry %lu: start: %lx end: %lx\n", i, e->starting_addr, */
+  /*            e->starting_addr + e->length); */
+  /*   } */
+  /* } */
+  /* for (size_t i = 0; i < elf_entries.size; ++i) { */
+  /*   struct TagELFEntry *e = &elf_entries.d[i]; */
+  /*   if (e->section_type != 0) { */
+  /*     printk("elf entry %lu: start: %lx end: %lx\n", i, e->segment_address,
+   */
+  /*            e->segment_address + e->segment_size); */
+  /*   } */
+  /* } */
+
+  build_mem_regions(mem_entries, elf_entries);
+  printk("Num regions: %lu\n", mem_regions.size);
+  for (size_t i = 0; i < mem_regions.size; ++i) {
+    struct MemRegion *r = &mem_regions.d[i];
+    printk("region %lu: start: %lx end: %lx\n", i, r->start, r->end);
   }
 }
