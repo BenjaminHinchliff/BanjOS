@@ -1,3 +1,4 @@
+#include "allocator.h"
 #include "exit.h"
 #include "gdt.h"
 #include "interrupts.h"
@@ -31,6 +32,10 @@ void kmain(void) {
   ps2_initialize();
 
   multiboot_tags_parse_to_mem_regions();
+
+#ifdef MMU_MEMTEST
+  MMU_memtest();
+#endif
 
   while (true) {
     HLT;

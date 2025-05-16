@@ -1,3 +1,5 @@
+#include "multiboot_tags.h"
+#include "allocator.h"
 #include "printk.h"
 #include "smolassert.h"
 
@@ -66,25 +68,19 @@ struct TagElfEntries {
   size_t size;
 };
 
-struct MemRegion {
-  void *start;
-  void *end;
-  void *next;
-};
-
-#define MEM_REGIONS_LEN 16
-static struct MemRegions {
-  struct MemRegion d[MEM_REGIONS_LEN];
-  size_t size;
-} mem_regions;
+static struct MemRegions mem_regions;
 
 static bool is_tags_terminator(struct TagCommonHeader *tag) {
   return tag->type == 0 && tag->size == 8;
 }
 
-static uintptr_t align_pointer(uintptr_t addr, uint32_t boundary) {
-  if (addr % 8 != 0) {
-    return addr + (8 - addr % 8);
+static uintptr_t align_pointer(uintptr_t addr, uint32_t boundary, bool after) {
+  if (addr % boundary != 0) {
+    if (after) {
+      return addr + (boundary - addr % boundary);
+    } else {
+      return addr - addr % boundary;
+    }
   } else {
     return addr;
   }
@@ -96,10 +92,17 @@ static uintptr_t align_pointer(uintptr_t addr, uint32_t boundary) {
 static void add_region(void *start, void *end) {
   assert(mem_regions.size < MEM_REGIONS_LEN &&
          "Number of memory regions must fit into static regions table");
-  struct MemRegion *region = &mem_regions.d[mem_regions.size++];
-  region->start = (void *)start;
-  region->end = (void *)end;
-  region->next = (void *)start;
+  // align region to pages
+  start = (void *)align_pointer((uintptr_t)start, MMU_PAGE_SIZE, true);
+  end = (void *)align_pointer((uintptr_t)end, MMU_PAGE_SIZE, false);
+  // alignment may mean that the region now is empty if smaller than 2MiB, we
+  // don't care about it then
+  if (start < end) {
+    struct MemRegion *region = &mem_regions.d[mem_regions.size++];
+    region->start = (void *)start;
+    region->end = (void *)end;
+    region->next = (void *)start;
+  }
 }
 
 static void build_mem_regions(struct TagMemMapEntries mem_entries,
@@ -116,6 +119,11 @@ static void build_mem_regions(struct TagMemMapEntries mem_entries,
     }
 
     uint64_t start = mem_entries.d[i].starting_addr;
+    // null is not a valid address
+    if (start == (uint64_t)NULL) {
+      ++start;
+    }
+
     uint64_t end = (mem_entries.d[i].starting_addr + mem_entries.d[i].length);
 
     // skip over any disallowed regions before the allowed region
@@ -176,7 +184,7 @@ void multiboot_tags_parse_to_mem_regions() {
     }
     // align to next 8-byte boundary (if needed)
     curtag = (struct TagCommonHeader *)align_pointer(
-        (uintptr_t)((uint8_t *)curtag + curtag->size), 8);
+        (uintptr_t)((uint8_t *)curtag + curtag->size), 8, true);
   }
 
   printk("Parsed tags mem: %lu elf: %lu\n", mem_entries.size, elf_entries.size);
@@ -200,6 +208,9 @@ void multiboot_tags_parse_to_mem_regions() {
   printk("Num regions: %lu\n", mem_regions.size);
   for (size_t i = 0; i < mem_regions.size; ++i) {
     struct MemRegion *r = &mem_regions.d[i];
-    printk("region %lu: start: %lx end: %lx\n", i, r->start, r->end);
+    printk("region %lu: start: %lx end: %lx\n", i, (uintptr_t)r->start,
+           (uintptr_t)r->end);
   }
 }
+
+struct MemRegions *multiboot_get_mem_regions() { return &mem_regions; }
