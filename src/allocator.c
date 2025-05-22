@@ -32,8 +32,8 @@ void *MMU_pf_alloc(void) {
   }
 
   // out of memory! scream?
-  printk("ALLOCATOR OUT OF MEMORY!!!");
-  EXIT;
+  /* printk("ALLOCATOR OUT OF MEMORY!!!"); */
+  /* EXIT; */
 
   // purely for compiler
   return NULL;

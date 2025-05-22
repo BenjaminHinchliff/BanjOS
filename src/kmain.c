@@ -4,6 +4,7 @@
 #include "interrupts.h"
 #include "keycodes.h"
 #include "multiboot_tags.h"
+#include "page_table.h"
 #include "portio.h"
 #include "printk.h"
 #include "ps2.h"
@@ -36,6 +37,8 @@ void kmain(void) {
 #ifdef MMU_MEMTEST
   MMU_memtest();
 #endif
+
+  init_page_table();
 
   while (true) {
     HLT;
