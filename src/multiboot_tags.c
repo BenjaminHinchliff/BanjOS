@@ -1,5 +1,5 @@
 #include "multiboot_tags.h"
-#include "allocator.h"
+#include "page_allocator.h"
 #include "printk.h"
 #include "smolassert.h"
 

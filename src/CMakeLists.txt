@@ -11,7 +11,7 @@ set(INCLUDES
   "multiboot_tags.h"
   "smolassert.h"
   "exit.h"
-  "allocator.h"
+  "page_allocator.h"
   "page_table.h")
 list(TRANSFORM INCLUDES PREPEND ${INCLUDE_PREFIX})
 
@@ -26,7 +26,7 @@ set(SRCS
   "string.c"
   "vga.c"
   "multiboot_tags.c"
-  "allocator.c"
+  "page_allocator.c"
   "page_table.c")
 
 set(ASMS

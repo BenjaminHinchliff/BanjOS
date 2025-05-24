@@ -1,110 +1,61 @@
 #include "allocator.h"
-#include "exit.h"
-#include "multiboot_tags.h"
-#include "printk.h"
+#include "page_allocator.h"
 #include "smolassert.h"
 
+#include <stddef.h>
 #include <stdint.h>
 
-struct FreeNode {
-  struct FreeNode *next;
+struct FreeList {
+  struct FreeList *next;
 };
 
-static struct FreeNode *free_list = NULL;
+struct KmallocPool {
+  size_t max_size;
+  struct FreeList *head;
+};
 
-void *MMU_pf_alloc(void) {
-  // allocate from free list first
-  if (free_list) {
-    void *addr = free_list;
-    free_list = free_list->next;
-    return addr;
+void pool_allocate_page(struct KmallocPool *pool) {
+  // FIXME: needs to be finished
+  void *page = NULL; // sbrk(MMU_PAGE_SIZE);
+  assert(MMU_PAGE_SIZE % pool->max_size == 0 &&
+         "pool size must be a multiple of block size");
+  for (void *block = page; block < page + MMU_PAGE_SIZE;
+       block += pool->max_size) {
+    struct FreeList *free_node = (struct FreeList *)block;
+    free_node->next = pool->head;
+    pool->head = free_node;
   }
-
-  // otherwise, find next free address in a region
-  struct MemRegions *regions = multiboot_get_mem_regions();
-  for (size_t i = 0; i < regions->size; ++i) {
-    struct MemRegion *region = &regions->d[i];
-    if (region->next < region->end) {
-      void *addr = region->next;
-      region->next += MMU_PAGE_SIZE;
-      return addr;
-    }
-  }
-
-  // out of memory! scream?
-  /* printk("ALLOCATOR OUT OF MEMORY!!!"); */
-  /* EXIT; */
-
-  // purely for compiler
-  return NULL;
 }
 
-void MMU_pf_free(void *pf) {
-  struct FreeNode *node = (struct FreeNode *)pf;
-  node->next = free_list;
-  free_list = node;
+struct KmallocHeader {
+  struct KmallocPool *pool;
+  size_t size;
+};
+
+size_t block_sizes[] = {32, 64, 128, 512, 1024, 2048, 4096};
+#define BLOCK_SIZES_LEN (sizeof(block_sizes) / sizeof(*block_sizes))
+
+static struct KmallocPool pools[BLOCK_SIZES_LEN];
+
+void init_alloc() {
+  for (size_t i = 0; i < BLOCK_SIZES_LEN; ++i) {
+    struct KmallocPool *pool = &pools[i];
+    pool->max_size = block_sizes[i] - sizeof(struct KmallocHeader);
+    pool->head = NULL;
+  }
 }
 
-#ifdef MMU_MEMTEST
-#define MEMTEST_CYCLES 2
-#define MEMTEST_ADDR_CAPACITY 0x8000
-static uintptr_t *memtest_addrs[MEMTEST_ADDR_CAPACITY];
-
-void MMU_memtest() {
-  // basic allocations
-  void *addr1 = MMU_pf_alloc();
-  void *addr2 = MMU_pf_alloc();
-
-  assert(addr1 + MMU_PAGE_SIZE == addr2 &&
-         "Addresses should be allocated in order");
-
-  MMU_pf_free(addr1);
-  MMU_pf_free(addr2);
-
-  void *addr2_new = MMU_pf_alloc();
-  void *addr1_new = MMU_pf_alloc();
-
-  assert(addr1 == addr1_new && "Addresses should be reused");
-  assert(addr2 == addr2_new && "In reverse order");
-
-  MMU_pf_free(addr1_new);
-  MMU_pf_free(addr2_new);
-
-  // count total allocatable blocks
-  struct MemRegions *regions = multiboot_get_mem_regions();
-  size_t total_pages = 0;
-  for (size_t i = 0; i < regions->size; ++i) {
-    struct MemRegion *region = &regions->d[i];
-    total_pages += (region->end - region->start) / MMU_PAGE_SIZE;
+void *kmalloc(size_t size) {
+  // find pool
+  struct KmallocPool *pool = pools;
+  for (; size > pool->max_size; ++pool)
+    ;
+  if (pool->head == NULL) {
+    pool_allocate_page(pool);
   }
-  assert(total_pages <= MEMTEST_ADDR_CAPACITY &&
-         "Pages must be less than the capacity of memtest to store addresses");
-
-  // run n cycles of whole memory tests (2 or more allow both allocation
-  // mechanisms to be tested)
-  for (size_t c = 0; c < MEMTEST_CYCLES; ++c) {
-    printk("Running memtest cycle %lu for %lu pages...\n", c, total_pages);
-    // allocate and write
-    for (size_t i = 0; i < total_pages; ++i) {
-      // allocate block
-      uintptr_t *page = MMU_pf_alloc();
-      // write address to block
-      for (size_t j = 0; j < MMU_PAGE_SIZE / sizeof(*page); ++j) {
-        page[j] = (uintptr_t)page;
-      }
-      memtest_addrs[i] = page;
-    }
-    // verify results
-    for (size_t i = 0; i < total_pages; ++i) {
-      uintptr_t *page = memtest_addrs[i];
-      for (size_t j = 0; j < MMU_PAGE_SIZE / sizeof(*page); ++j) {
-        assert(page[j] == (uintptr_t)page &&
-               "bit pattern before and after should match!")
-      }
-      MMU_pf_free(page);
-    }
-  }
-
-  printk("Memtest passed.\n");
+  void *addr = pool->head;
+  pool->head = pool->head->next;
+  return addr;
 }
-#endif
+
+void kfree(void *addr) {}
