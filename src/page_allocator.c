@@ -89,16 +89,33 @@ void *MMU_alloc_page() {
   return virt_addr;
 }
 
-void *MMU_alloc_pages(int num) {}
+void *MMU_alloc_pages(int num) {
+  void *virt_addr = sbrk(MMU_PAGE_SIZE * num);
+  for (void *page = virt_addr; page < virt_addr + MMU_PAGE_SIZE * num;
+       page += MMU_PAGE_SIZE) {
+    struct PTEntry *pt_entry = page_table_get_entry(
+        (struct PageEntry *)get_current_page_table(), virt_addr, true);
+    pt_entry->available1 = (uint8_t)true;
+  }
+  return virt_addr;
+}
 
-void MMU_free_page(void *addr) {
+void MMU_free_page(void *virt_addr) {
   struct PTEntry *pt_entry = page_table_get_entry(
-      (struct PageEntry *)get_current_page_table(), addr, true);
+      (struct PageEntry *)get_current_page_table(), virt_addr, true);
   MMU_pf_free((void *)((uint64_t)pt_entry->addr << 12));
   pt_entry->present = false;
 }
 
-void MMU_free_pages(void *addr, int num) {}
+void MMU_free_pages(void *virt_addr, int num) {
+  for (void *page = virt_addr; page < virt_addr + MMU_PAGE_SIZE * num;
+       page += MMU_PAGE_SIZE) {
+    struct PTEntry *pt_entry = page_table_get_entry(
+        (struct PageEntry *)get_current_page_table(), virt_addr, true);
+    MMU_pf_free((void *)((uint64_t)pt_entry->addr << 12));
+    pt_entry->present = false;
+  }
+}
 
 #ifdef MMU_MEMTEST
 #define MEMTEST_CYCLES 2
