@@ -12,7 +12,8 @@ set(INCLUDES
   "smolassert.h"
   "exit.h"
   "page_allocator.h"
-  "page_table.h")
+  "page_table.h"
+  "allocator.h")
 list(TRANSFORM INCLUDES PREPEND ${INCLUDE_PREFIX})
 
 set(SRCS
@@ -27,7 +28,8 @@ set(SRCS
   "vga.c"
   "multiboot_tags.c"
   "page_allocator.c"
-  "page_table.c")
+  "page_table.c"
+  "allocator.c")
 
 set(ASMS
   "boot.asm"
@@ -43,3 +45,15 @@ target_include_directories(${KERNEL_TARGET} PRIVATE ${INCLUDE_PREFIX})
 file(MAKE_DIRECTORY ${KERNEL_OUTPUT})
 set_target_properties(${KERNEL_TARGET} PROPERTIES
   RUNTIME_OUTPUT_DIRECTORY ${KERNEL_OUTPUT})
+
+add_custom_command(OUTPUT "${PROJECT_BINARY_DIR}/base_image.img"
+  COMMAND sudo "${PROJECT_SOURCE_DIR}/tools/mkimg.sh" "${PROJECT_BINARY_DIR}/base_image.img")
+
+add_custom_command(OUTPUT "${PROJECT_BINARY_DIR}/image.img"
+  COMMAND ${CMAKE_COMMAND} -E copy_directory_if_different "${PROJECT_SOURCE_DIR}/res/" "${PROJECT_BINARY_DIR}/image/"
+  COMMAND sudo "${PROJECT_SOURCE_DIR}/tools/kerncpy.sh" "${PROJECT_BINARY_DIR}/image.img" "${PROJECT_BINARY_DIR}/base_image.img" "${PROJECT_BINARY_DIR}/image/"
+  DEPENDS
+    "$<TARGET_FILE:${KERNEL_TARGET}>"
+    "${PROJECT_BINARY_DIR}/base_image.img")
+
+add_custom_target(image DEPENDS "${PROJECT_BINARY_DIR}/image.img")

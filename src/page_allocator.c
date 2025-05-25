@@ -69,8 +69,17 @@ void page_fault_handler(int num, int code, void *arg) {
   void *addr = get_cr2();
   struct PTEntry *entry = page_table_get_entry(
       (struct PageEntry *)get_current_page_table(), addr, false);
-  if (entry == NULL || entry->available1 == 0) {
-    printk("Invalid page access.\n");
+  if (entry == NULL) {
+    printk(
+        "Invalid page access. Virtual addr: %lx. Out of range of page table\n",
+        (uintptr_t)addr);
+    EXIT;
+    return;
+  }
+  if (entry->available1 == 0) {
+    printk("Invalid page access. Virtual addr: %lx. Entry not marked as "
+           "available\n",
+           (uintptr_t)addr);
     EXIT;
     return;
   }
@@ -89,14 +98,14 @@ void *MMU_alloc_page() {
   return virt_addr;
 }
 
+void mark_available_callback(void *virt_addr, struct PTEntry *entry) {
+  entry->available1 = (uint8_t)true;
+}
+
 void *MMU_alloc_pages(int num) {
   void *virt_addr = sbrk(MMU_PAGE_SIZE * num);
-  for (void *page = virt_addr; page < virt_addr + MMU_PAGE_SIZE * num;
-       page += MMU_PAGE_SIZE) {
-    struct PTEntry *pt_entry = page_table_get_entry(
-        (struct PageEntry *)get_current_page_table(), virt_addr, true);
-    pt_entry->available1 = (uint8_t)true;
-  }
+  page_table_walk((struct PageEntry *)get_current_page_table(), virt_addr,
+                  virt_addr + MMU_PAGE_SIZE * num, mark_available_callback);
   return virt_addr;
 }
 

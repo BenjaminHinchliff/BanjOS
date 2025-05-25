@@ -14,23 +14,22 @@ struct KmallocPool {
   struct FreeList *head;
 };
 
-void pool_allocate_page(struct KmallocPool *pool) {
-  // FIXME: needs to be finished
-  void *page = NULL; // sbrk(MMU_PAGE_SIZE);
-  assert(MMU_PAGE_SIZE % pool->max_size == 0 &&
+struct KmallocHeader {
+  struct KmallocPool *pool;
+  size_t size;
+} __attribute__((packed));
+
+static void pool_allocate_page(struct KmallocPool *pool) {
+  void *page = MMU_alloc_page();
+  assert(MMU_PAGE_SIZE % (pool->max_size + sizeof(struct KmallocHeader)) == 0 &&
          "pool size must be a multiple of block size");
   for (void *block = page; block < page + MMU_PAGE_SIZE;
-       block += pool->max_size) {
+       block += pool->max_size + sizeof(struct KmallocHeader)) {
     struct FreeList *free_node = (struct FreeList *)block;
     free_node->next = pool->head;
     pool->head = free_node;
   }
 }
-
-struct KmallocHeader {
-  struct KmallocPool *pool;
-  size_t size;
-};
 
 size_t block_sizes[] = {32, 64, 128, 512, 1024, 2048, 4096};
 #define BLOCK_SIZES_LEN (sizeof(block_sizes) / sizeof(*block_sizes))
@@ -47,15 +46,43 @@ void init_alloc() {
 
 void *kmalloc(size_t size) {
   // find pool
-  struct KmallocPool *pool = pools;
-  for (; size > pool->max_size; ++pool)
+  size_t i;
+  struct KmallocPool *pool;
+  for (i = 0, pool = pools; i < BLOCK_SIZES_LEN && size > pool->max_size;
+       ++i, ++pool)
     ;
-  if (pool->head == NULL) {
-    pool_allocate_page(pool);
+  // one of the pools is large enough, otherwise dedicated allocation
+  if (i < BLOCK_SIZES_LEN) {
+    if (pool->head == NULL) {
+      pool_allocate_page(pool);
+    }
+    void *addr = pool->head;
+    pool->head = pool->head->next;
+    struct KmallocHeader *header = addr;
+    header->pool = pool;
+    header->size = 0;
+    return addr + sizeof(struct KmallocHeader);
+  } else {
+    size += sizeof(struct KmallocHeader);
+    size_t num_pages = size / MMU_PAGE_SIZE + !!(size % MMU_PAGE_SIZE);
+    void *addr = MMU_alloc_pages(num_pages);
+    struct KmallocHeader *header = addr;
+    header->pool = NULL;
+    header->size = size;
+    return addr + sizeof(struct KmallocHeader);
   }
-  void *addr = pool->head;
-  pool->head = pool->head->next;
-  return addr;
 }
 
-void kfree(void *addr) {}
+void kfree(void *addr) {
+  void *block = (addr - sizeof(struct KmallocHeader));
+  struct KmallocHeader header = *(struct KmallocHeader *)block;
+  if (header.pool != NULL) {
+    struct FreeList *free_node = (struct FreeList *)block;
+    free_node->next = header.pool->head;
+    header.pool->head = free_node;
+  } else {
+    size_t num_pages =
+        header.size / MMU_PAGE_SIZE + !!(header.size % MMU_PAGE_SIZE);
+    MMU_free_pages(addr, num_pages);
+  }
+}

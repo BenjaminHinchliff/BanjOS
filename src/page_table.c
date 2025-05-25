@@ -57,8 +57,6 @@ void *page_table_virt_to_phys_addr(struct PageEntry *table, void *virt_addr) {
   return (void *)(((uint64_t)entry->addr << 12) + offset);
 }
 
-typedef void (*entry_callback)(void *addr, struct PTEntry *entry);
-
 void direct_map_callback(void *addr, struct PTEntry *entry) {
   entry->present = true;
   entry->read_write = true;
