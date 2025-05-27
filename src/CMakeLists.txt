@@ -13,7 +13,8 @@ set(INCLUDES
   "exit.h"
   "page_allocator.h"
   "page_table.h"
-  "allocator.h")
+  "allocator.h"
+  "processes.h")
 list(TRANSFORM INCLUDES PREPEND ${INCLUDE_PREFIX})
 
 set(SRCS
@@ -29,7 +30,8 @@ set(SRCS
   "multiboot_tags.c"
   "page_allocator.c"
   "page_table.c"
-  "allocator.c")
+  "allocator.c"
+  "processes.c")
 
 set(ASMS
   "boot.asm"

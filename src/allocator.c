@@ -31,7 +31,7 @@ static void pool_allocate_page(struct KmallocPool *pool) {
   }
 }
 
-size_t block_sizes[] = {32, 64, 128, 512, 1024, 2048, 4096};
+size_t block_sizes[] = {32, 64, 128, 512, 1024, 2048};
 #define BLOCK_SIZES_LEN (sizeof(block_sizes) / sizeof(*block_sizes))
 
 static struct KmallocPool pools[BLOCK_SIZES_LEN];

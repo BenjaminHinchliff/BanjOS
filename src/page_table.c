@@ -64,7 +64,7 @@ void direct_map_callback(void *addr, struct PTEntry *entry) {
 }
 
 void page_table_walk(struct PageEntry *table, void *start_addr, void *end_addr,
-                     entry_callback callback) {
+                     entry_callback_t callback) {
   uint16_t indices[4], offset;
   for (void *addr = start_addr; addr < end_addr; addr += MMU_PAGE_SIZE) {
     struct PTEntry *entry = page_table_get_entry(table, addr, true);

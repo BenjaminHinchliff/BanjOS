@@ -1,6 +1,8 @@
 global isr_stub_table
 
 extern irq_handler
+extern cur_proc
+extern next_proc
 
 %macro push_scratch_regs 0
     push rax
@@ -49,14 +51,67 @@ isr_err:
     ; shift stack to remove error code
     lea rax, [rsp + 64]
 shift_stack:
-    mov rbx, [rax]
-    mov [rax + 8], rbx
+    mov rcx, [rax]
+    mov [rax + 8], rcx
     sub rax, 8
     cmp rax, rsp
     jnz shift_stack
     add rsp, 8
 isr_no_err:
     call irq_handler
+    mov rax, [rel cur_proc]
+    mov rcx, [rel next_proc]
+    cmp rax, rcx
+    je no_ctx_switch
+    ;; push all the registers (that we haven't yet)!
+    ;; callee saved
+    push rbx
+    push r12
+    push r13
+    push r14
+    push r15
+    ;; 16 bit segment stuff (not really used)
+    xor rax, rax
+    mov rax, ds
+    push rax
+    xor rcx, rcx
+    mov rcx, es
+    push rcx
+    xor rdx, rdx
+    mov rdx, fs
+    push rdx
+    xor rsi, rsi
+    mov rsi, gs
+    push rsi
+    ;; stack base pointer
+    push rbp
+    ;; switch to the new context
+    ;; store current rsp
+    mov rax, [rel cur_proc]
+    mov [rax], rsp
+    ;; pull rsp out of context
+    mov rax, [rel next_proc]
+    mov rsp, [rax]
+    ;; set cur_proc to next_proc
+    mov [rel cur_proc], rax
+    ;; now we can just pop the whole state
+    pop rbp
+    ;; segment garbage again
+    pop rsi
+    mov ds, rsi
+    pop rdx
+    mov fs, rdx
+    pop rcx
+    mov es, rcx
+    pop rax
+    mov gs, rax
+    ;; callee saved
+    pop r15
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
+no_ctx_switch:
     pop_scratch_regs
     iretq
 

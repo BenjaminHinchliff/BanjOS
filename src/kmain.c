@@ -1,16 +1,15 @@
 #include "allocator.h"
-#include "exit.h"
 #include "gdt.h"
 #include "interrupts.h"
-#include "keycodes.h"
 #include "multiboot_tags.h"
 #include "page_allocator.h"
 #include "page_table.h"
 #include "portio.h"
 #include "printk.h"
+#include "processes.h"
 #include "ps2.h"
 #include "serial.h"
-#include "smolassert.h"
+#include "smolassert.h" // just macros so clangd thinks it's unused
 #include "vga.h"
 
 #include <limits.h>
@@ -25,6 +24,20 @@ void disable_cursor(void) {
 }
 
 #define NUM_ALLOCS 1024
+
+void test_thread1(void *arg) {
+  for (size_t i = 0; i < 3; ++i) {
+    printk("thread 1! (%lu)\n", i);
+    yield();
+  }
+}
+
+void test_thread2(void *arg) {
+  for (size_t i = 0; i < 3; ++i) {
+    printk("thread 2! (%lu)\n", i);
+    yield();
+  }
+}
 
 void kmain(void) {
   disable_cursor();
@@ -45,21 +58,11 @@ void kmain(void) {
   MMU_alloc_init();
   init_alloc();
 
-  uint64_t **fishes = kmalloc(sizeof(*fishes) * NUM_ALLOCS);
-
-  for (size_t i = 0; i < NUM_ALLOCS; ++i) {
-    uint64_t *fish = kmalloc(sizeof(*fish));
-    *fish = (uint64_t)fish;
-    fishes[i] = fish;
-  }
-  for (size_t i = 0; i < NUM_ALLOCS; ++i) {
-    kfree(fishes[i]);
-  }
-  kfree(fishes);
-
-  printk("test complete\n");
+  PROC_create_kthread(&test_thread1, NULL);
+  PROC_create_kthread(&test_thread2, NULL);
 
   while (true) {
+    PROC_run();
     HLT;
   }
 }

@@ -84,6 +84,7 @@ void page_fault_handler(int num, int code, void *arg) {
     return;
   }
   entry->addr = (uint64_t)MMU_pf_alloc() >> 12;
+  entry->read_write = true;
   entry->present = true;
 }
 

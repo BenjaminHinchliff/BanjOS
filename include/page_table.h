@@ -112,6 +112,6 @@ static inline void *get_cr2() {
 struct PTEntry *page_table_get_entry(struct PageEntry *table, void *virt_addr,
                                      bool allocate);
 
-typedef void (*entry_callback)(void *addr, struct PTEntry *entry);
+typedef void (*entry_callback_t)(void *addr, struct PTEntry *entry);
 void page_table_walk(struct PageEntry *table, void *start_addr, void *end_addr,
-                     entry_callback callback);
+                     entry_callback_t callback);
