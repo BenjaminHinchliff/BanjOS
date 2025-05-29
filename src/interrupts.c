@@ -125,6 +125,9 @@ static uint8_t PF_stack[CRITICAL_STACK_SIZE];
 #define GP_INT 0xD
 #define GP_IST_IDX 3
 static uint8_t GP_stack[CRITICAL_STACK_SIZE];
+#define EX_INT 0x81
+#define EX_INT_IDX 4
+static uint8_t EX_stack[CRITICAL_STACK_SIZE];
 
 struct TaskStateSegment {
   uint32_t reserved1;
@@ -177,6 +180,7 @@ void IRQ_init_tss() {
   tss.interrupt_stack_table[DF_IST_IDX - 1] = (uint64_t)DF_stack;
   tss.interrupt_stack_table[PF_IST_IDX - 1] = (uint64_t)PF_stack;
   tss.interrupt_stack_table[GP_IST_IDX - 1] = (uint64_t)GP_stack;
+  tss.interrupt_stack_table[EX_INT_IDX - 1] = (uint64_t)EX_stack;
 
   struct TaskStateSegmentDescriptor tss_desc;
   tss_set_descriptor(&tss_desc);
@@ -201,6 +205,9 @@ void IRQ_init() {
       break;
     case GP_INT:
       idt_set_descriptor(&idt[i], isr_stub_table[i], GP_IST_IDX);
+      break;
+    case EX_INT:
+      idt_set_descriptor(&idt[i], isr_stub_table[i], EX_INT_IDX);
       break;
     default:
       idt_set_descriptor(&idt[i], isr_stub_table[i], 0);
@@ -227,29 +234,29 @@ void IRQ_handler_set(int number, irq_handler_t handler, void *arg) {
 }
 
 void IRQ_set_mask(uint8_t IRQline) {
-    uint16_t port;
-    uint8_t value;
+  uint16_t port;
+  uint8_t value;
 
-    if(IRQline < 8) {
-        port = PIC1_DATA;
-    } else {
-        port = PIC2_DATA;
-        IRQline -= 8;
-    }
-    value = inb(port) | (1 << IRQline);
-    outb(port, value);        
+  if (IRQline < 8) {
+    port = PIC1_DATA;
+  } else {
+    port = PIC2_DATA;
+    IRQline -= 8;
+  }
+  value = inb(port) | (1 << IRQline);
+  outb(port, value);
 }
 
 void IRQ_clear_mask(uint8_t IRQline) {
-    uint16_t port;
-    uint8_t value;
+  uint16_t port;
+  uint8_t value;
 
-    if(IRQline < 8) {
-        port = PIC1_DATA;
-    } else {
-        port = PIC2_DATA;
-        IRQline -= 8;
-    }
-    value = inb(port) & ~(1 << IRQline);
-    outb(port, value);        
+  if (IRQline < 8) {
+    port = PIC1_DATA;
+  } else {
+    port = PIC2_DATA;
+    IRQline -= 8;
+  }
+  value = inb(port) & ~(1 << IRQline);
+  outb(port, value);
 }
