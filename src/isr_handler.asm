@@ -63,6 +63,8 @@ isr_no_err:
     mov rcx, [rel next_proc]
     cmp rax, rcx
     je no_ctx_switch
+    cmp rax, 0
+    je no_cur_proc
     ;; push all the registers (that we haven't yet)!
     ;; callee saved
     push rbx
@@ -89,6 +91,7 @@ isr_no_err:
     ;; store current rsp
     mov rax, [rel cur_proc]
     mov [rax], rsp
+no_cur_proc:
     ;; pull rsp out of context
     mov rax, [rel next_proc]
     mov rsp, [rax]

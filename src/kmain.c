@@ -10,6 +10,7 @@
 #include "ps2.h"
 #include "serial.h"
 #include "smolassert.h" // just macros so clangd thinks it's unused
+#include "snakes.h"
 #include "vga.h"
 
 #include <limits.h>
@@ -25,19 +26,7 @@ void disable_cursor(void) {
 
 #define NUM_ALLOCS 1024
 
-void test_thread1(void *arg) {
-  for (size_t i = 0; i < 3; ++i) {
-    printk("thread 1! (%lu)\n", i);
-    yield();
-  }
-}
-
-void test_thread2(void *arg) {
-  for (size_t i = 0; i < 3; ++i) {
-    printk("thread 2! (%lu)\n", i);
-    yield();
-  }
-}
+void snakeify(void *arg) { setup_snakes(false); }
 
 void kmain(void) {
   disable_cursor();
@@ -58,8 +47,7 @@ void kmain(void) {
   MMU_alloc_init();
   init_alloc();
 
-  PROC_create_kthread(&test_thread1, NULL);
-  PROC_create_kthread(&test_thread2, NULL);
+  PROC_create_kthread(&snakeify, NULL);
 
   while (true) {
     PROC_run();

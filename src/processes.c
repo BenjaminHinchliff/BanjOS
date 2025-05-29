@@ -2,7 +2,7 @@
 #include "allocator.h"
 #include "gdt.h"
 #include "interrupts.h"
-#include "printk.h"
+#include "smolassert.h"
 
 #include <stddef.h>
 #include <stdint.h>
@@ -30,18 +30,13 @@ struct InitalProcFrame {
   void *kexit_ret;
 } __attribute__((packed));
 
-struct ProcContext {
-  uint64_t *rsp;
-  // this is actually only kind of true
-  uint64_t *frame;
-} __attribute__((packed));
-
 struct ProcNode {
   struct ProcContext *context;
   struct ProcNode *next;
   struct ProcNode *prev;
 };
 
+static size_t pid_count = 0;
 static struct ProcNode *proclist = {NULL};
 
 struct ProcContext *cur_proc = NULL;
@@ -72,18 +67,19 @@ struct ProcContext *proclist_next_proc() {
   }
 }
 
-struct ProcContext *proclist_unqueue_last_proc() {
+struct ProcContext *proclist_unqueue_cur_proc() {
   if (proclist) {
-    struct ProcNode *tail = proclist->prev;
-    // remove tail from list
-    if (tail != tail->prev) {
-      tail->prev->next = tail->next;
-      tail->next->prev = tail->prev;
+    struct ProcNode *head = proclist;
+    // remove head from list
+    if (head != head->prev) {
+      head->prev->next = head->next;
+      head->next->prev = head->prev;
+      proclist = head->next;
     } else {
       proclist = NULL;
     }
-    struct ProcContext *ctx = tail->context;
-    kfree(tail);
+    struct ProcContext *ctx = head->context;
+    kfree(head);
     return ctx;
   } else {
     return NULL;
@@ -93,10 +89,11 @@ struct ProcContext *proclist_unqueue_last_proc() {
 void noop_handler(int number, int error_code, void *arg) {}
 
 void kexit_handler(int number, int error_code, void *arg) {
-  struct ProcContext *ctx = proclist_unqueue_last_proc();
-  printk("freeing proc with frame: %lx\n", (uintptr_t)ctx->frame);
+  struct ProcContext *ctx = proclist_unqueue_cur_proc();
+  assert(ctx == cur_proc && "must pop correct proc cur_proc!");
   kfree(ctx->frame);
   kfree(ctx);
+  cur_proc = NULL;
   if (proclist == NULL) {
     // all processes completed
     next_proc = (struct ProcContext *)arg;
@@ -127,7 +124,7 @@ void PROC_run() {
   }
 }
 
-void PROC_create_kthread(kproc_t entry_point, void *arg) {
+size_t PROC_create_kthread(kproc_t entry_point, void *arg) {
   struct ProcContext *ctx = kmalloc(sizeof(*ctx));
   // make a new stack
   void *frame = kmalloc(PROC_STACK_SIZE);
@@ -137,6 +134,7 @@ void PROC_create_kthread(kproc_t entry_point, void *arg) {
   // FIXME: not all threads should be kernel mode in the future
   initial->cs = GDT_kernel_desc_offset();
   // set the function address as the return location for iretq
+  initial->rdi = (uint64_t)arg;
   initial->rip = entry_point;
   // after iretq returns the stack should start right at the start
   initial->rsp = frame + PROC_STACK_SIZE - sizeof(void *);
@@ -145,7 +143,9 @@ void PROC_create_kthread(kproc_t entry_point, void *arg) {
   // set the rsp for the switcher itself
   ctx->frame = (uint64_t *)frame;
   ctx->rsp = (uint64_t *)initial;
+  ctx->pid = pid_count++;
   proclist_queue_proc(ctx);
+  return ctx->pid;
 }
 
 void PROC_reschedule() { next_proc = proclist_next_proc(); }

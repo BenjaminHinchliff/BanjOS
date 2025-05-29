@@ -10,9 +10,13 @@
 static volatile uint16_t *VGA_buf = VGA_START;
 static size_t VGA_cursor = 0;
 
+int VGA_row_count(void) { return VGA_HEIGHT; }
+
+int VGA_col_count(void) { return VGA_WIDTH; }
+
 void VGA_clear(void) {
   CLI_GUARD;
-  memset((uint16_t *)VGA_buf, 0x0f << 8, VGA_WIDTH * VGA_HEIGHT);
+  memset((uint16_t *)VGA_buf, 0x0f << 8, VGA_SIZE * VGA_SCREEN_CHAR_BYTES);
   STI_GUARD;
 }
 
@@ -45,6 +49,14 @@ void VGA_display_char(char c) {
       VGA_display_char('\n');
     }
   }
+
+  STI_GUARD;
+}
+
+void VGA_display_attr_char(int x, int y, char c, int fg, int bg) {
+  CLI_GUARD;
+
+  VGA_buf[VGA_WIDTH * y + x] = ((fg | bg) << 8) | c;
 
   STI_GUARD;
 }
