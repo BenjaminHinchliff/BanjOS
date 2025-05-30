@@ -26,7 +26,21 @@ void disable_cursor(void) {
 
 #define NUM_ALLOCS 1024
 
-void snakeify(void *arg) { setup_snakes(false); }
+void snakeify(void *arg) { setup_snakes(true); }
+
+void test_thread1(void *arg) {
+  for (size_t i = 0; i < 10; ++i) {
+    printk("Thread 1! (%lu - %lx)\n", i, arg);
+    yield();
+  }
+}
+
+void test_thread2(void *arg) {
+  for (size_t i = 0; i < 10; ++i) {
+    printk("Thread 2! (%lu - %lx)\n", i, arg);
+    yield();
+  }
+}
 
 void kmain(void) {
   disable_cursor();
@@ -48,6 +62,10 @@ void kmain(void) {
   init_alloc();
 
   PROC_create_kthread(&snakeify, NULL);
+  /* PROC_create_kthread(&test_thread1, NULL); */
+  /* int *fish = kmalloc(sizeof(int)); */
+  /* *fish = 420; */
+  /* PROC_create_kthread(&test_thread2, &fish); */
 
   while (true) {
     PROC_run();

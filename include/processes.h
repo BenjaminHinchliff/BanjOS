@@ -10,8 +10,14 @@ struct ProcContext {
   uint64_t *frame;
 } __attribute__((packed));
 
-extern struct ProcContext *cur_proc;
-extern struct ProcContext *next_proc;
+struct ProcNode {
+  struct ProcContext *context;
+  struct ProcNode *next;
+  struct ProcNode *prev;
+};
+
+extern struct ProcNode *cur_proc;
+extern struct ProcNode *next_proc;
 
 void PROC_run();
 

@@ -30,17 +30,11 @@ struct InitalProcFrame {
   void *kexit_ret;
 } __attribute__((packed));
 
-struct ProcNode {
-  struct ProcContext *context;
-  struct ProcNode *next;
-  struct ProcNode *prev;
-};
-
 static size_t pid_count = 0;
 static struct ProcNode *proclist = {NULL};
 
-struct ProcContext *cur_proc = NULL;
-struct ProcContext *next_proc = NULL;
+struct ProcNode *cur_proc = NULL;
+struct ProcNode *next_proc = NULL;
 
 void proclist_queue_proc(struct ProcContext *ctx) {
   struct ProcNode *node = kmalloc(sizeof(*node));
@@ -57,56 +51,46 @@ void proclist_queue_proc(struct ProcContext *ctx) {
   }
 }
 
-struct ProcContext *proclist_next_proc() {
+struct ProcNode *proclist_next_proc() {
   if (proclist) {
-    struct ProcContext *ctx = proclist->context;
+    struct ProcNode *node = proclist;
     proclist = proclist->next;
-    return ctx;
+    return node;
   } else {
     return NULL;
   }
 }
 
-struct ProcContext *proclist_unqueue_cur_proc() {
+void proclist_unqueue_cur_proc() {
   if (proclist) {
-    struct ProcNode *head = proclist;
     // remove head from list
-    if (head != head->prev) {
-      head->prev->next = head->next;
-      head->next->prev = head->prev;
-      proclist = head->next;
+    if (cur_proc != cur_proc->prev) {
+      cur_proc->prev->next = cur_proc->next;
+      cur_proc->next->prev = cur_proc->prev;
+      if (cur_proc == proclist) {
+        proclist = cur_proc->next;
+      }
     } else {
       proclist = NULL;
     }
-    struct ProcContext *ctx = head->context;
-    kfree(head);
-    return ctx;
-  } else {
-    return NULL;
   }
 }
 
 void noop_handler(int number, int error_code, void *arg) {}
 
 void kexit_handler(int number, int error_code, void *arg) {
-  struct ProcContext *ctx = proclist_unqueue_cur_proc();
-  assert(ctx == cur_proc && "must pop correct proc cur_proc!");
-  kfree(ctx->frame);
-  kfree(ctx);
+  proclist_unqueue_cur_proc();
+  kfree(cur_proc->context->frame);
+  kfree(cur_proc->context);
+  kfree(cur_proc);
   cur_proc = NULL;
   if (proclist == NULL) {
     // all processes completed
-    next_proc = (struct ProcContext *)arg;
+    next_proc = (struct ProcNode *)arg;
   } else {
     // otherwise set next proc to head of proclist
-    next_proc = proclist->context;
+    next_proc = proclist;
   }
-}
-
-static inline void *get_rsp() {
-  void *rsp;
-  asm volatile("mov %%rsp, %0" : "=a"(rsp));
-  return rsp;
 }
 
 void PROC_run() {
@@ -115,8 +99,11 @@ void PROC_run() {
     // set cur_proc to be this thread
     struct ProcContext *orig_ctx = kmalloc(sizeof(*orig_ctx));
     memset(orig_ctx, 0, sizeof(*orig_ctx));
-    IRQ_handler_set(0x81, kexit_handler, orig_ctx);
-    cur_proc = orig_ctx;
+    struct ProcNode *orig_node = kmalloc(sizeof(*orig_node));
+    memset(orig_node, 0, sizeof(*orig_node));
+    orig_node->context = orig_ctx;
+    IRQ_handler_set(0x81, kexit_handler, orig_node);
+    cur_proc = orig_node;
     PROC_reschedule();
     asm volatile("int $0x80");
     IRQ_handler_set(0x80, NULL, NULL);

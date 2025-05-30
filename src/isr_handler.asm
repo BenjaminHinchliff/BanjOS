@@ -90,11 +90,13 @@ isr_no_err:
     ;; switch to the new context
     ;; store current rsp
     mov rax, [rel cur_proc]
-    mov [rax], rsp
+    mov rcx, [rax]
+    mov [rcx], rsp
 no_cur_proc:
     ;; pull rsp out of context
     mov rax, [rel next_proc]
-    mov rsp, [rax]
+    mov rcx, [rax]
+    mov rsp, [rcx]
     ;; set cur_proc to next_proc
     mov [rel cur_proc], rax
     ;; now we can just pop the whole state

@@ -425,7 +425,7 @@ snake snakeFromLWpid(int lw_pid) {
    */
   snake s;
   for (s = allsnakes; s; s = s->others)
-    if (s->pid == cur_proc->pid)
+    if (s->pid == cur_proc->context->pid)
       break;
   return s;
 }
@@ -436,7 +436,7 @@ void setup_snakes(int hungry) {
   size_t snake;
 
   // Don't use this seed for anything meaningful
-  srand(cur_proc->pid);
+  srand(cur_proc->context->pid);
   rows = VGA_row_count();
   cols = VGA_col_count();
 
