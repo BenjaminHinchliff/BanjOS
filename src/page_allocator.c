@@ -110,20 +110,22 @@ void *MMU_alloc_pages(int num) {
   return virt_addr;
 }
 
+static inline void invlpg(void *virt_addr) {
+  asm volatile("invlpg %0" : : "rm"(virt_addr));
+}
+
 void MMU_free_page(void *virt_addr) {
   struct PTEntry *pt_entry = page_table_get_entry(
       (struct PageEntry *)get_current_page_table(), virt_addr, true);
   MMU_pf_free((void *)((uint64_t)pt_entry->addr << 12));
   pt_entry->present = false;
+  invlpg(virt_addr);
 }
 
 void MMU_free_pages(void *virt_addr, int num) {
   for (void *page = virt_addr; page < virt_addr + MMU_PAGE_SIZE * num;
        page += MMU_PAGE_SIZE) {
-    struct PTEntry *pt_entry = page_table_get_entry(
-        (struct PageEntry *)get_current_page_table(), virt_addr, true);
-    MMU_pf_free((void *)((uint64_t)pt_entry->addr << 12));
-    pt_entry->present = false;
+    MMU_free_page(page);
   }
 }
 
