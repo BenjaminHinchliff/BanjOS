@@ -1,6 +1,7 @@
 global isr_stub_table
 
 extern irq_handler
+extern PROC_resume_source
 extern cur_proc
 extern next_proc
 
@@ -95,6 +96,10 @@ isr_no_err:
 no_cur_proc:
     ;; pull rsp out of context
     mov rax, [rel next_proc]
+    cmp rax, 0
+    je invalid_next_proc
+valid_next_proc:
+    mov rax, [rel next_proc]
     mov rcx, [rax]
     mov rsp, [rcx]
     ;; set cur_proc to next_proc
@@ -119,6 +124,10 @@ no_cur_proc:
 no_ctx_switch:
     pop_scratch_regs
     iretq
+
+invalid_next_proc:
+    call PROC_resume_source
+    jmp valid_next_proc
 
 isr_no_err_stub 0
 isr_no_err_stub 1

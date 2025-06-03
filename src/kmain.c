@@ -39,6 +39,12 @@ void test_thread2(void *arg) {
   }
 }
 
+void keyboard_io(void *arg) {
+  while (true) {
+    printk("%c", getc());
+  }
+}
+
 void kmain(void) {
   disable_cursor();
   VGA_clear();
@@ -46,7 +52,6 @@ void kmain(void) {
   IRQ_init();
 
   SER_init();
-  ps2_initialize();
 
   multiboot_tags_parse_to_mem_regions();
 
@@ -58,10 +63,13 @@ void kmain(void) {
   MMU_alloc_init();
   init_alloc();
 
+  ps2_initialize();
+
   PROC_create_kthread(&test_thread1, NULL);
   int *fish = kmalloc(sizeof(int));
   *fish = 420;
   PROC_create_kthread(&test_thread2, &fish);
+  PROC_create_kthread(&keyboard_io, NULL);
 
   while (true) {
     PROC_run();

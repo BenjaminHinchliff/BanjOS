@@ -4,10 +4,14 @@
 #include "keycodes.h"
 #include "portio.h"
 #include "printk.h"
+#include "processes.h"
+#include "ring_buffer.h"
 #include "vga.h"
 
 #include <stddef.h>
 #include <stdint.h>
+
+static struct RingBuffer keyboard_ring;
 
 struct Ps2Status ps2_get_status() {
   uint8_t status = inb(PS2_STATUS_COMMAND_PORT);
@@ -62,7 +66,17 @@ uint8_t ps2_read_data_block() {
 }
 
 void ps2_irq_handler(int num, int error_code, void *arg) {
-  ps2_echo();
+  enum KeyCode code = ps2_read_data_block();
+  if (code == KEYCODE_ENTER_PRESSED) {
+    ring_producer_add_char(&keyboard_ring, '\n');
+  } else {
+    char c = scan_code_to_char(code);
+    if (c != '\0') {
+      ring_producer_add_char(&keyboard_ring, c);
+    }
+  }
+  PROC_unblock_all(keyboard_ring.blocked);
+
   PIC_sendEOI(num);
 }
 
@@ -138,6 +152,8 @@ void ps2_initialize() {
   dprintk("Keyboard Initialized.\n");
 
   dprintk("Enable Interrupts...\n");
+  // setup the ring buffer for the handler to write to
+  ring_init(&keyboard_ring, true);
   // setup the handler before actually enabling them
   IRQ_handler_set(PS2_INTERRUPT_NUM, ps2_irq_handler, NULL);
   IRQ_clear_mask(IRQ1);
@@ -162,4 +178,10 @@ void ps2_echo() {
       printk("%c", c);
     }
   }
+}
+
+int getc() {
+  char c;
+  ring_consumer_block_next(&keyboard_ring, &c);
+  return c;
 }

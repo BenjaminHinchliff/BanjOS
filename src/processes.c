@@ -4,7 +4,6 @@
 #include "interrupts.h"
 #include "smolassert.h"
 
-#include <cstddef>
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
@@ -33,6 +32,7 @@ struct InitalProcFrame {
 
 static size_t pid_count = 0;
 static struct ProcessQueue avail_procs = {NULL};
+static struct ProcNode source_proc;
 
 struct ProcNode *cur_proc = NULL;
 struct ProcNode *next_proc = NULL;
@@ -98,6 +98,8 @@ void PROC_unblock_head(struct ProcessQueue *queue) {
 
 void PROC_init_queue(struct ProcessQueue *queue) { queue->head = NULL; }
 
+void PROC_resume_source() { next_proc = &source_proc; }
+
 void noop_handler(int number, int error_code, void *arg) {}
 
 void kexit_handler(int number, int error_code, void *arg) {
@@ -108,7 +110,7 @@ void kexit_handler(int number, int error_code, void *arg) {
   cur_proc = NULL;
   if (avail_procs.head == NULL) {
     // all processes completed
-    next_proc = (struct ProcNode *)arg;
+    PROC_resume_source();
   } else {
     // otherwise set next proc to head of proclist
     next_proc = avail_procs.head;
@@ -121,11 +123,10 @@ void PROC_run() {
     // set cur_proc to be this thread
     struct ProcContext *orig_ctx = kmalloc(sizeof(*orig_ctx));
     memset(orig_ctx, 0, sizeof(*orig_ctx));
-    struct ProcNode *orig_node = kmalloc(sizeof(*orig_node));
-    memset(orig_node, 0, sizeof(*orig_node));
-    orig_node->context = orig_ctx;
-    IRQ_handler_set(0x81, kexit_handler, orig_node);
-    cur_proc = orig_node;
+    memset(&source_proc, 0, sizeof(source_proc));
+    source_proc.context = orig_ctx;
+    IRQ_handler_set(0x81, kexit_handler, NULL);
+    cur_proc = &source_proc;
     PROC_reschedule();
     asm volatile("int $0x80");
     IRQ_handler_set(0x80, NULL, NULL);

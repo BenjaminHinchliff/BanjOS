@@ -3,71 +3,31 @@
 #include "interrupts.h"
 #include "portio.h"
 #include "printk.h"
+#include "ring_buffer.h"
 
 #include <stdbool.h>
 #include <string.h>
 
 #define COM1 0x3f8
 #define INT_ENABLE_TRANSMIT_EMPTY (1 << 1)
-#define BUFF_SIZE 16
 
-struct SerialRing {
-  char buff[BUFF_SIZE];
-  char *consumer;
-  char *producer;
-};
-
-static struct SerialRing ring;
-
-static void serial_ring_init(struct SerialRing *state) {
-  state->consumer = &state->buff[0];
-  state->producer = &state->buff[0];
-}
-
-static bool serial_ring_consumer_next(struct SerialRing *state, char *next) {
-  if (state->consumer == state->producer) {
-    return false;
-  }
-
-  *next = *state->consumer++;
-
-  if (state->consumer >= &state->buff[BUFF_SIZE]) {
-    state->consumer = &state->buff[0];
-  }
-  return true;
-}
-
-static bool serial_ring_producer_add_char(struct SerialRing *state,
-                                          char to_add) {
-  if (state->producer == state->consumer - 1 ||
-      (state->consumer == &state->buff[0] &&
-       state->producer == &state->buff[BUFF_SIZE - 1])) {
-    return false;
-  }
-
-  *state->producer++ = to_add;
-
-  if (state->producer >= &state->buff[BUFF_SIZE]) {
-    state->producer = &state->buff[0];
-  }
-  return true;
-}
+static struct RingBuffer ring;
 
 static int is_transmit_empty() { return inb(COM1 + 5) & 0x20; }
 
 static void write_serial(char c) { outb(COM1, c); }
 
-static void serial_ring_consumer_serial_write(struct SerialRing *state) {
+static void serial_ring_consumer_serial_write(struct RingBuffer *state) {
   if (is_transmit_empty()) {
     char c;
-    if (serial_ring_consumer_next(state, &c)) {
+    if (ring_consumer_next(state, &c)) {
       write_serial(c);
     }
   }
 }
 
 static void serial_transmit_ready_handler(int num, int error_code, void *arg) {
-  serial_ring_consumer_serial_write((struct SerialRing *)arg);
+  serial_ring_consumer_serial_write((struct RingBuffer *)arg);
   PIC_sendEOI(num);
 }
 
@@ -75,7 +35,7 @@ int SER_write(const char *buff, int len) {
   CLI_GUARD;
 
   for (int i = 0; i < len; i += 1) {
-    serial_ring_producer_add_char(&ring, buff[i]);
+    ring_producer_add_char(&ring, buff[i]);
   }
   serial_ring_consumer_serial_write(&ring);
 
@@ -88,7 +48,7 @@ int SER_write(const char *buff, int len) {
 }
 
 void SER_init(void) {
-  serial_ring_init(&ring);
+  ring_init(&ring, false);
 
   outb(COM1 + 1, 0x00); // Disable all interrupts
   outb(COM1 + 3, 0x03); // 8 bits, no parity, one stop bit

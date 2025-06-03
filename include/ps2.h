@@ -65,3 +65,5 @@ uint8_t ps2_read_data_block();
 void ps2_initialize();
 
 void ps2_echo();
+
+int getc();
