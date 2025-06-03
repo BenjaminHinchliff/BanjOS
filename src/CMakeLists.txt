@@ -14,8 +14,7 @@ set(INCLUDES
   "page_allocator.h"
   "page_table.h"
   "allocator.h"
-  "processes.h"
-  "snakes.h")
+  "processes.h")
 list(TRANSFORM INCLUDES PREPEND ${INCLUDE_PREFIX})
 
 set(SRCS
@@ -32,8 +31,7 @@ set(SRCS
   "page_allocator.c"
   "page_table.c"
   "allocator.c"
-  "processes.c"
-  "snakes.c")
+  "processes.c")
 
 set(ASMS
   "boot.asm"

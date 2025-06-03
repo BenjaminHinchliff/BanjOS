@@ -4,6 +4,7 @@
 #include "interrupts.h"
 #include "smolassert.h"
 
+#include <cstddef>
 #include <stddef.h>
 #include <stdint.h>
 #include <string.h>
@@ -31,70 +32,91 @@ struct InitalProcFrame {
 } __attribute__((packed));
 
 static size_t pid_count = 0;
-static struct ProcNode *proclist = {NULL};
+static struct ProcessQueue avail_procs = {NULL};
 
 struct ProcNode *cur_proc = NULL;
 struct ProcNode *next_proc = NULL;
 
-void proclist_queue_proc(struct ProcContext *ctx) {
-  struct ProcNode *node = kmalloc(sizeof(*node));
-  node->context = ctx;
-  if (proclist) {
-    node->prev = proclist->prev;
-    node->next = proclist;
-    node->prev->next = node;
-    node->next->prev = node;
-  } else {
-    node->next = node;
-    node->prev = node;
-    proclist = node;
-  }
-}
-
-struct ProcNode *proclist_next_proc() {
-  if (proclist) {
-    struct ProcNode *node = proclist;
-    proclist = proclist->next;
+static struct ProcNode *cycle_next_proc(struct ProcessQueue *queue) {
+  if (queue->head) {
+    struct ProcNode *node = queue->head;
+    queue->head = queue->head->next;
     return node;
   } else {
     return NULL;
   }
 }
 
-void proclist_unqueue_cur_proc() {
-  if (proclist) {
-    // remove head from list
-    if (cur_proc != cur_proc->prev) {
-      cur_proc->prev->next = cur_proc->next;
-      cur_proc->next->prev = cur_proc->prev;
-      if (cur_proc == proclist) {
-        proclist = cur_proc->next;
-      }
-    } else {
-      proclist = NULL;
+static void unlink_proc(struct ProcNode *node, struct ProcessQueue *queue) {
+  if (node != node->prev) {
+    node->prev->next = node->next;
+    node->next->prev = node->prev;
+    if (node == queue->head) {
+      queue->head = node->next;
     }
+  } else {
+    queue->head = NULL;
   }
 }
+
+static void append_proc(struct ProcNode *node, struct ProcessQueue *queue) {
+  if (queue->head) {
+    node->prev = queue->head->prev;
+    node->next = queue->head;
+    node->prev->next = node;
+    node->next->prev = node;
+  } else {
+    node->next = node;
+    node->prev = node;
+    queue->head = node;
+  }
+}
+
+void PROC_block_on(struct ProcessQueue *queue, int enable_ints) {
+  if (queue == NULL)
+    return;
+
+  unlink_proc(cur_proc, &avail_procs);
+  append_proc(cur_proc, queue);
+  if (enable_ints)
+    STI;
+
+  yield();
+}
+
+void PROC_unblock_all(struct ProcessQueue *queue) {
+  while (queue->head != NULL) {
+    PROC_unblock_head(queue);
+  }
+}
+
+void PROC_unblock_head(struct ProcessQueue *queue) {
+  struct ProcNode *node = queue->head;
+  unlink_proc(node, queue);
+  append_proc(node, &avail_procs);
+}
+
+void PROC_init_queue(struct ProcessQueue *queue) { queue->head = NULL; }
 
 void noop_handler(int number, int error_code, void *arg) {}
 
 void kexit_handler(int number, int error_code, void *arg) {
-  proclist_unqueue_cur_proc();
+  unlink_proc(cur_proc, &avail_procs);
   kfree(cur_proc->context->frame);
   kfree(cur_proc->context);
   kfree(cur_proc);
   cur_proc = NULL;
-  if (proclist == NULL) {
+  if (avail_procs.head == NULL) {
     // all processes completed
     next_proc = (struct ProcNode *)arg;
   } else {
     // otherwise set next proc to head of proclist
-    next_proc = proclist;
+    next_proc = avail_procs.head;
   }
 }
 
 void PROC_run() {
-  if (proclist != NULL) {
+  if (avail_procs.head != NULL) {
     IRQ_handler_set(0x80, noop_handler, NULL);
     // set cur_proc to be this thread
     struct ProcContext *orig_ctx = kmalloc(sizeof(*orig_ctx));
@@ -131,11 +153,14 @@ size_t PROC_create_kthread(kproc_t entry_point, void *arg) {
   ctx->frame = (uint64_t *)frame;
   ctx->rsp = (uint64_t *)initial;
   ctx->pid = pid_count++;
-  proclist_queue_proc(ctx);
+  // frame node
+  struct ProcNode *node = kmalloc(sizeof(*node));
+  node->context = ctx;
+  append_proc(node, &avail_procs);
   return ctx->pid;
 }
 
-void PROC_reschedule() { next_proc = proclist_next_proc(); }
+void PROC_reschedule() { next_proc = cycle_next_proc(&avail_procs); }
 
 void yield() {
   PROC_reschedule();
