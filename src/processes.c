@@ -33,6 +33,7 @@ struct InitalProcFrame {
 static size_t pid_count = 0;
 static struct ProcessQueue avail_procs = {NULL};
 static struct ProcNode source_proc;
+static struct ProcContext source_proc_ctx;
 
 struct ProcNode *cur_proc = NULL;
 struct ProcNode *next_proc = NULL;
@@ -121,10 +122,9 @@ void PROC_run() {
   if (avail_procs.head != NULL) {
     IRQ_handler_set(0x80, noop_handler, NULL);
     // set cur_proc to be this thread
-    struct ProcContext *orig_ctx = kmalloc(sizeof(*orig_ctx));
-    memset(orig_ctx, 0, sizeof(*orig_ctx));
+    memset(&source_proc_ctx, 0, sizeof(source_proc_ctx));
     memset(&source_proc, 0, sizeof(source_proc));
-    source_proc.context = orig_ctx;
+    source_proc.context = &source_proc_ctx;
     IRQ_handler_set(0x81, kexit_handler, NULL);
     cur_proc = &source_proc;
     PROC_reschedule();
