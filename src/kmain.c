@@ -1,4 +1,5 @@
 #include "allocator.h"
+#include "block_device.h"
 #include "gdt.h"
 #include "interrupts.h"
 #include "multiboot_tags.h"
@@ -45,6 +46,23 @@ void keyboard_io(void *arg) {
   }
 }
 
+void drive_init(void *arg) {
+  struct BlockDevice *dev = ata_probe(PRIM_IO_BASE, PRIM_CTL_BASE, 0, IRQ14);
+  uint8_t *buf = kmalloc(dev->blk_size);
+  dev->read_block(dev, 0, buf);
+  printk("block 0:\n");
+  for (size_t i = 0; i < dev->blk_size; ++i) {
+    printk("%x ", buf[i]);
+  }
+  printk("\n");
+  dev->read_block(dev, 3, buf);
+  printk("block 32: %u\n", dev->blk_size);
+  for (size_t i = 0; i < dev->blk_size; ++i) {
+    printk("%x ", buf[i]);
+  }
+  printk("\n");
+}
+
 void kmain(void) {
   disable_cursor();
   VGA_clear();
@@ -70,6 +88,7 @@ void kmain(void) {
   *fish = 420;
   PROC_create_kthread(&test_thread2, &fish);
   PROC_create_kthread(&keyboard_io, NULL);
+  PROC_create_kthread(&drive_init, NULL);
 
   while (true) {
     PROC_run();

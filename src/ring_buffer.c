@@ -35,7 +35,7 @@ bool ring_consumer_next(struct RingBuffer *state, char *next) {
 void ring_consumer_block_next(struct RingBuffer *state, char *next) {
   CLI;
   while (state->consumer == state->producer) {
-    PROC_block_on(state->blocked, 1);
+    PROC_block_on(state->blocked, true);
     CLI;
   }
 

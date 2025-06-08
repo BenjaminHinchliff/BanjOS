@@ -93,6 +93,7 @@ void PROC_unblock_all(struct ProcessQueue *queue) {
 
 void PROC_unblock_head(struct ProcessQueue *queue) {
   struct ProcNode *node = queue->head;
+  assert(node != NULL && "Cannot unblock null head");
   unlink_proc(node, queue);
   append_proc(node, &avail_procs);
 }
