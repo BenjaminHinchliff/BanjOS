@@ -48,6 +48,7 @@ void keyboard_io(void *arg) {
 
 void drive_init(void *arg) {
   struct BlockDevice *dev = ata_probe(PRIM_IO_BASE, PRIM_CTL_BASE, 0, IRQ14);
+  BLK_register(dev);
   uint8_t *buf = kmalloc(dev->blk_size);
   dev->read_block(dev, 0, buf);
   printk("block 0:\n");

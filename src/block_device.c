@@ -204,3 +204,18 @@ struct BlockDevice *ata_probe(uint16_t base, uint16_t master, uint8_t slave,
   IRQ_clear_mask(IRQ14);
   return (struct BlockDevice *)ata;
 }
+
+struct BlockDeviceRegistration {
+  struct BlockDevice *dev;
+  struct BlockDeviceRegistration *next;
+};
+
+static struct BlockDeviceRegistration *registered_devs;
+
+int BLK_register(struct BlockDevice *dev) {
+  struct BlockDeviceRegistration *dev_reg = kmalloc(sizeof(*dev_reg));
+  dev_reg->dev = dev;
+  dev_reg->next = registered_devs;
+  registered_devs = dev_reg;
+  return 1;
+}

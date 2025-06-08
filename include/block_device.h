@@ -38,3 +38,5 @@ enum ATADevType detect_devtype(uint8_t slavebit, uint16_t base,
                                uint16_t ctl_base);
 struct BlockDevice *ata_probe(uint16_t base, uint16_t master, uint8_t slave,
                               uint8_t irq);
+
+int BLK_register(struct BlockDevice *dev);
