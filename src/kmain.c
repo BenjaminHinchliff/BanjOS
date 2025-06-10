@@ -54,7 +54,8 @@ void drive_init(void *arg) {
   dev->read_block(dev, 0, buf);
   struct MBR *mbr = kmalloc(sizeof(*mbr));
   mbr_init(mbr, dev);
-  printk("Part LBA: %qx\n", mbr->partitions[0].first_sector_lba);
+  printk("Part LBA: %qu\n", mbr->partitions[0].first_sector_lba);
+  printk("Part Size: %qu\n", mbr->partitions[0].num_sectors);
 }
 
 void kmain(void) {
