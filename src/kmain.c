@@ -2,6 +2,7 @@
 #include "block_device.h"
 #include "gdt.h"
 #include "interrupts.h"
+#include "mbr.h"
 #include "multiboot_tags.h"
 #include "page_allocator.h"
 #include "page_table.h"
@@ -51,17 +52,9 @@ void drive_init(void *arg) {
   BLK_register(dev);
   uint8_t *buf = kmalloc(dev->blk_size);
   dev->read_block(dev, 0, buf);
-  printk("block 0:\n");
-  for (size_t i = 0; i < dev->blk_size; ++i) {
-    printk("%x ", buf[i]);
-  }
-  printk("\n");
-  dev->read_block(dev, 3, buf);
-  printk("block 32: %u\n", dev->blk_size);
-  for (size_t i = 0; i < dev->blk_size; ++i) {
-    printk("%x ", buf[i]);
-  }
-  printk("\n");
+  struct MBR *mbr = kmalloc(sizeof(*mbr));
+  mbr_init(mbr, dev);
+  printk("Part LBA: %qx\n", mbr->partitions[0].first_sector_lba);
 }
 
 void kmain(void) {
