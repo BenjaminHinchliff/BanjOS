@@ -51,11 +51,21 @@ void keyboard_io(void *arg) {
   }
 }
 
+int readdir_printer(const char *filename, struct Inode *inode, void *arg) {
+  struct SuperBlock *sb = (struct SuperBlock *)arg;
+  printk("%s: %u\n", filename, inode->ino);
+  if (filename[0] != '.' && (inode->st_mode & 0x4000)) {
+    sb->root_inode->readdir(inode, &readdir_printer, sb);
+  }
+  return 1;
+}
+
 void drive_init(void *arg) {
   ext2_init();
   struct BlockDevice *dev = ata_probe(PRIM_IO_BASE, PRIM_CTL_BASE, 0, IRQ14);
   struct SuperBlock *sb = FS_probe(dev);
-  printk("sb: %qx\n", sb);
+  printk("sb: %lx\n", sb);
+  sb->root_inode->readdir(sb->root_inode, &readdir_printer, sb);
   /* uint8_t *buf = kmalloc(dev->blk_size); */
   /* dev->read_block(dev, 0, buf); */
   /* struct MBR *mbr = kmalloc(sizeof(*mbr)); */
@@ -82,15 +92,18 @@ void kmain(void) {
   MMU_alloc_init();
   init_alloc();
 
-  PROC_create_kthread(&test_thread1, NULL);
-  int *fish = kmalloc(sizeof(int));
-  *fish = 420;
-  PROC_create_kthread(&test_thread2, &fish);
+  /* PROC_create_kthread(&test_thread1, NULL); */
+  /* int *fish = kmalloc(sizeof(int)); */
+  /* *fish = 420; */
+  /* PROC_create_kthread(&test_thread2, &fish); */
   PROC_create_kthread(&keyboard_io, NULL);
   PROC_create_kthread(&drive_init, NULL);
 
   while (true) {
     PROC_run();
-    HLT;
+    if (!PROC_has_unblocked()) {
+      STI;
+      HLT;
+    }
   }
 }

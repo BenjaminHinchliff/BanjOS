@@ -20,7 +20,8 @@ set(INCLUDES
   "mbr.h"
   "vfs.h"
   "ext2.h"
-  "fs.h")
+  "fs.h"
+  "alignment.h")
 list(TRANSFORM INCLUDES PREPEND ${INCLUDE_PREFIX})
 
 set(SRCS

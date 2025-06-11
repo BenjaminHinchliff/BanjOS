@@ -1,4 +1,5 @@
 #include "multiboot_tags.h"
+#include "alignment.h"
 #include "page_allocator.h"
 #include "printk.h"
 #include "smolassert.h"
@@ -72,18 +73,6 @@ static struct MemRegions mem_regions;
 
 static bool is_tags_terminator(struct TagCommonHeader *tag) {
   return tag->type == 0 && tag->size == 8;
-}
-
-static uintptr_t align_pointer(uintptr_t addr, uint32_t boundary, bool after) {
-  if (addr % boundary != 0) {
-    if (after) {
-      return addr + (boundary - addr % boundary);
-    } else {
-      return addr - addr % boundary;
-    }
-  } else {
-    return addr;
-  }
 }
 
 #define MIN(a, b) (((a) < (b)) ? (a) : (b))

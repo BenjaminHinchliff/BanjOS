@@ -1,5 +1,6 @@
 #pragma once
 
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -34,6 +35,7 @@ void PROC_block_on(struct ProcessQueue *, int enable_ints);
 void PROC_unblock_all(struct ProcessQueue *);
 void PROC_unblock_head(struct ProcessQueue *);
 void PROC_init_queue(struct ProcessQueue *);
+bool PROC_has_unblocked();
 
 void yield();
 

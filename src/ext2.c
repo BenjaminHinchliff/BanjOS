@@ -1,11 +1,14 @@
 #include "ext2.h"
+#include "alignment.h"
 #include "allocator.h"
 #include "block_device.h"
 #include "fs.h"
 #include "mbr.h"
+#include "printk.h"
 #include "vfs.h"
 
 #include <stdint.h>
+#include <string.h>
 
 struct Ext2SuperBlock {
   uint32_t num_inodes;
@@ -75,6 +78,17 @@ struct Ext2Inode {
   uint32_t size_high;
 } __attribute__((packed));
 
+#define NUM_DIRECT_BLOCKS                                                      \
+  (sizeof(((struct Ext2Inode *)0)->direct_blocks) / sizeof(uint32_t))
+
+struct Ext2DirEntryHeader {
+  uint32_t ino;
+  uint16_t entry_size;
+  uint8_t name_len_lsb;
+  uint8_t msb_name_len_or_type;
+  const char name;
+} __attribute__((packed));
+
 _Static_assert(sizeof(struct Ext2Inode) == 112, "Inodes should be 112 bytes");
 
 #define EXT2_OFFSET 1024
@@ -113,12 +127,58 @@ uint64_t pow2(uint64_t n) {
   return number;
 }
 
+int ext2_read_block(struct Ext2VfsSuperBlock *vsb, off_t block_num, void *dst) {
+  off_t sector_num = block_num * (vsb->block_size / vsb->dev->blk_size);
+  off_t num_sectors = vsb->block_size / vsb->dev->blk_size;
+
+  for (off_t i = 0; i < num_sectors; ++i) {
+    if (!MBR_read_block(vsb->dev, vsb->mbr, vsb->part_num, sector_num + i,
+                        dst + vsb->dev->blk_size * i)) {
+      return false;
+    }
+  }
+  return true;
+}
+
 struct Ext2VfsInode {
   struct Inode in;
   struct Ext2Inode *ext_in;
+  struct Ext2VfsSuperBlock *vsb;
 };
 
-struct Ext2VfsInode *ext2_vfs_inode_init(struct Ext2Inode *ext_in, ino_t ino) {
+int readdir(struct Inode *inode, readdir_cb cb, void *arg) {
+  struct Ext2VfsInode *vino = (struct Ext2VfsInode *)inode;
+  if (!(inode->st_mode & 0x4000)) {
+    return false;
+  }
+
+  void *content_block = kmalloc(vino->vsb->block_size);
+  for (int i = 0; i < NUM_DIRECT_BLOCKS && vino->ext_in->direct_blocks[i] != 0;
+       ++i) {
+    ext2_read_block(vino->vsb, vino->ext_in->direct_blocks[i], content_block);
+    struct Ext2DirEntryHeader *header = content_block;
+    while ((void *)header < content_block + vino->vsb->block_size &&
+           header->ino != 0) {
+      char *name = kmalloc(sizeof(*name) * header->name_len_lsb + 1);
+      int i;
+      for (i = 0; i < header->name_len_lsb; ++i) {
+        name[i] = ((const char *)&header->name)[i];
+      }
+      name[i] = '\0';
+      struct Inode *entry_ino =
+          vino->vsb->sb.read_inode((struct SuperBlock *)vino->vsb, header->ino);
+      cb(name, entry_ino, arg);
+      kfree(name);
+      header = (struct Ext2DirEntryHeader *)align_pointer(
+          (uintptr_t)((void *)header + header->entry_size), 4, true);
+    }
+  }
+
+  return true;
+}
+
+struct Ext2VfsInode *ext2_vfs_inode_init(struct Ext2Inode *ext_in, ino_t ino,
+                                         struct Ext2VfsSuperBlock *vsb) {
   struct Ext2VfsInode *vin = kmalloc(sizeof(*vin));
   vin->in.ino = ino;
   vin->in.st_mode = ext_in->mode;
@@ -126,9 +186,10 @@ struct Ext2VfsInode *ext2_vfs_inode_init(struct Ext2Inode *ext_in, ino_t ino) {
   vin->in.st_gid = ext_in->gid;
   vin->in.st_size = ((off_t)ext_in->size_high << 32) | ext_in->size_low;
   vin->in.open = NULL;
-  vin->in.readdir = NULL;
+  vin->in.readdir = &readdir;
   vin->in.unlink = NULL;
   vin->ext_in = ext_in;
+  vin->vsb = vsb;
   return vin;
 }
 
@@ -147,6 +208,7 @@ struct Inode *read_inode(struct SuperBlock *sb, unsigned long inode_num) {
 
   off_t index_idx = (inode_num - 1) % vsb->ext_sb->num_group_inodes;
   off_t block_idx = index_idx * vsb->ext_sb->inode_size / vsb->block_size;
+  off_t block_offset = (index_idx * vsb->ext_sb->inode_size) % vsb->block_size;
   off_t block_num = group->start_block_addr_inode_table + block_idx;
 
   off_t sector_num = block_num * (vsb->block_size / vsb->dev->blk_size);
@@ -157,9 +219,10 @@ struct Inode *read_inode(struct SuperBlock *sb, unsigned long inode_num) {
     MBR_read_block(vsb->dev, vsb->mbr, vsb->part_num, sector_num + i,
                    ext_inode_block + vsb->dev->blk_size * i);
   }
-  struct Ext2Inode *ext_inode =
-      ext_inode_block + vsb->ext_sb->inode_size * index_idx;
-  return (struct Inode *)ext2_vfs_inode_init(ext_inode, inode_num);
+  struct Ext2Inode *ext_inode = kmalloc(sizeof(*ext_inode));
+  memcpy(ext_inode, ext_inode_block + block_offset, sizeof(*ext_inode));
+  kfree(ext_inode_block);
+  return (struct Inode *)ext2_vfs_inode_init(ext_inode, inode_num, vsb);
 }
 
 struct Ext2VfsSuperBlock *

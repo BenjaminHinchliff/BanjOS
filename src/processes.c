@@ -98,6 +98,8 @@ void PROC_unblock_head(struct ProcessQueue *queue) {
   append_proc(node, &avail_procs);
 }
 
+bool PROC_has_unblocked() { return avail_procs.head != NULL; }
+
 void PROC_init_queue(struct ProcessQueue *queue) { queue->head = NULL; }
 
 void PROC_resume_source() { next_proc = &source_proc; }

@@ -123,6 +123,8 @@ struct ATARequest *ata_req_unqueue(struct ATABlockDevice *ata) {
 }
 
 void ata_req_execute(struct ATABlockDevice *ata, struct ATARequest *req) {
+  /* printk("reading: %lu\n", req->blk_num); */
+  /* printk("next req: %lx\n", ata->req_head); */
   uint16_t sector_count = 1;
   outb(ata->ata_base + REG_DEVSEL, 0x40 | ata->slave << 4);
   outb(ata->ata_base + REG_SEC_CNT, sector_count >> 8);
@@ -157,22 +159,22 @@ int ata_48_read_block(struct BlockDevice *this, uint64_t blk_num, void *dst) {
   struct ATABlockDevice *ata = (struct ATABlockDevice *)this;
   struct ATARequest *req = kmalloc(sizeof(*req));
   req->blk_num = blk_num;
-  CLI;
   ata_req_queue_execute(ata, req);
   uint8_t status = inb(ata->ata_master + REG_ALT_STS);
+  CLI;
   while ((status & STATUS_BSY) && !(status & (STATUS_DRQ | STATUS_ERR))) {
     PROC_block_on(&ata->block_queue, true);
     CLI;
     status = inb(ata->ata_master + REG_ALT_STS);
   }
   STI;
+  for (size_t i = 0; i < ata->dev.blk_size / sizeof(uint16_t); ++i) {
+    ((uint16_t *)dst)[i] = inw(ata->ata_base + REG_DATA);
+  }
+
   kfree(ata_req_unqueue(ata));
   if (ata->req_head != NULL) {
     ata_req_execute(ata, ata->req_head);
-  }
-
-  for (size_t i = 0; i < ata->dev.blk_size / sizeof(uint16_t); ++i) {
-    ((uint16_t *)dst)[i] = inw(ata->ata_base + REG_DATA);
   }
 
   return 1;
