@@ -146,16 +146,57 @@ struct Ext2VfsInode {
   struct Ext2VfsSuperBlock *vsb;
 };
 
+void read_inode_block(struct Ext2VfsInode *vino, uint64_t block, void *dst) {
+  uint64_t num_indirect_per = vino->vsb->block_size / sizeof(uint32_t);
+  if (block < NUM_DIRECT_BLOCKS) {
+    ext2_read_block(vino->vsb, vino->ext_in->direct_blocks[block], dst);
+  } else if (block - NUM_DIRECT_BLOCKS < num_indirect_per) {
+    uint32_t *indirect_block = kmalloc(vino->vsb->block_size);
+    ext2_read_block(vino->vsb, vino->ext_in->singly_indirect_block,
+                    indirect_block);
+    ext2_read_block(vino->vsb, indirect_block[block - NUM_DIRECT_BLOCKS], dst);
+  } else if (block - NUM_DIRECT_BLOCKS - num_indirect_per <
+             num_indirect_per * num_indirect_per) {
+    uint64_t off = block - NUM_DIRECT_BLOCKS - num_indirect_per;
+    uint64_t single_off = off / num_indirect_per;
+    uint64_t double_off = off % num_indirect_per;
+    uint32_t *indirect_block = kmalloc(vino->vsb->block_size);
+    ext2_read_block(vino->vsb, vino->ext_in->singly_indirect_block,
+                    indirect_block);
+    uint32_t *indirecter_block = kmalloc(vino->vsb->block_size);
+    ext2_read_block(vino->vsb, indirect_block[single_off], indirecter_block);
+    ext2_read_block(vino->vsb, indirect_block[double_off], dst);
+  } else if (block - NUM_DIRECT_BLOCKS - num_indirect_per -
+                 num_indirect_per * num_indirect_per <
+             num_indirect_per * num_indirect_per * num_indirect_per) {
+    uint64_t off = block - NUM_DIRECT_BLOCKS - num_indirect_per -
+                   num_indirect_per * num_indirect_per;
+    uint64_t single_off = off / (num_indirect_per * num_indirect_per);
+    uint64_t double_off = off % (num_indirect_per * num_indirect_per);
+    uint64_t triple_off = double_off / num_indirect_per;
+    uint64_t quad_off = double_off % num_indirect_per;
+    uint32_t *indirect_block = kmalloc(vino->vsb->block_size);
+    ext2_read_block(vino->vsb, vino->ext_in->doubly_indirect_block,
+                    indirect_block);
+    uint32_t *indirecter_block = kmalloc(vino->vsb->block_size);
+    ext2_read_block(vino->vsb, indirect_block[single_off], indirecter_block);
+    uint32_t *indirecterer_block = kmalloc(vino->vsb->block_size);
+    ext2_read_block(vino->vsb, indirecter_block[triple_off], indirecter_block);
+    ext2_read_block(vino->vsb, indirect_block[quad_off], dst);
+  }
+}
+
 int readdir(struct Inode *inode, readdir_cb cb, void *arg) {
   struct Ext2VfsInode *vino = (struct Ext2VfsInode *)inode;
   if (!(inode->st_mode & 0x4000)) {
     return false;
   }
 
+  uint64_t num_blocks = vino->in.st_size / vino->vsb->block_size +
+                        !!(vino->in.st_size % vino->vsb->block_size);
   void *content_block = kmalloc(vino->vsb->block_size);
-  for (int i = 0; i < NUM_DIRECT_BLOCKS && vino->ext_in->direct_blocks[i] != 0;
-       ++i) {
-    ext2_read_block(vino->vsb, vino->ext_in->direct_blocks[i], content_block);
+  for (int i = 0; i < num_blocks; ++i) {
+    read_inode_block(vino, i, content_block);
     struct Ext2DirEntryHeader *header = content_block;
     while ((void *)header < content_block + vino->vsb->block_size &&
            header->ino != 0) {
