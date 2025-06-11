@@ -155,6 +155,7 @@ void read_inode_block(struct Ext2VfsInode *vino, uint64_t block, void *dst) {
     ext2_read_block(vino->vsb, vino->ext_in->singly_indirect_block,
                     indirect_block);
     ext2_read_block(vino->vsb, indirect_block[block - NUM_DIRECT_BLOCKS], dst);
+    kfree(indirect_block);
   } else if (block - NUM_DIRECT_BLOCKS - num_indirect_per <
              num_indirect_per * num_indirect_per) {
     uint64_t off = block - NUM_DIRECT_BLOCKS - num_indirect_per;
@@ -166,6 +167,8 @@ void read_inode_block(struct Ext2VfsInode *vino, uint64_t block, void *dst) {
     uint32_t *indirecter_block = kmalloc(vino->vsb->block_size);
     ext2_read_block(vino->vsb, indirect_block[single_off], indirecter_block);
     ext2_read_block(vino->vsb, indirect_block[double_off], dst);
+    kfree(indirect_block);
+    kfree(indirecter_block);
   } else if (block - NUM_DIRECT_BLOCKS - num_indirect_per -
                  num_indirect_per * num_indirect_per <
              num_indirect_per * num_indirect_per * num_indirect_per) {
@@ -183,6 +186,9 @@ void read_inode_block(struct Ext2VfsInode *vino, uint64_t block, void *dst) {
     uint32_t *indirecterer_block = kmalloc(vino->vsb->block_size);
     ext2_read_block(vino->vsb, indirecter_block[triple_off], indirecter_block);
     ext2_read_block(vino->vsb, indirect_block[quad_off], dst);
+    kfree(indirect_block);
+    kfree(indirecter_block);
+    kfree(indirecterer_block);
   }
 }
 
@@ -218,6 +224,8 @@ int readdir(struct Inode *inode, readdir_cb cb, void *arg) {
   return true;
 }
 
+struct File *ext2_file_open(struct Inode *inode);
+
 struct Ext2VfsInode *ext2_vfs_inode_init(struct Ext2Inode *ext_in, ino_t ino,
                                          struct Ext2VfsSuperBlock *vsb) {
   struct Ext2VfsInode *vin = kmalloc(sizeof(*vin));
@@ -226,7 +234,7 @@ struct Ext2VfsInode *ext2_vfs_inode_init(struct Ext2Inode *ext_in, ino_t ino,
   vin->in.st_uid = ext_in->uid;
   vin->in.st_gid = ext_in->gid;
   vin->in.st_size = ((off_t)ext_in->size_high << 32) | ext_in->size_low;
-  vin->in.open = NULL;
+  vin->in.open = ext2_file_open;
   vin->in.readdir = &readdir;
   vin->in.unlink = NULL;
   vin->ext_in = ext_in;
@@ -305,6 +313,49 @@ struct SuperBlock *ext2_probe(struct BlockDevice *dev) {
     }
   }
   return NULL;
+}
+
+struct Ext2File {
+  struct File f;
+  struct Ext2VfsInode *inode;
+  uint64_t cursor;
+};
+
+int ext2_file_read(struct File *file, char *dst, int len) {
+  struct Ext2File *exfi = (struct Ext2File *)file;
+  if (exfi->cursor + len > exfi->inode->in.st_size) {
+    len -= exfi->cursor + len - exfi->inode->in.st_size;
+  }
+  int start_block = exfi->cursor / exfi->inode->vsb->block_size;
+  int start_offset = exfi->cursor % exfi->inode->vsb->block_size;
+  int num_blocks = len / exfi->inode->vsb->block_size +
+                   !!(len % exfi->inode->vsb->block_size);
+  int last_block_end =
+      len - len / exfi->inode->vsb->block_size * exfi->inode->vsb->block_size;
+  void *content_block = kmalloc(exfi->inode->vsb->block_size);
+  for (int i = 0; i < num_blocks; ++i) {
+    read_inode_block(exfi->inode, start_block + i, content_block);
+    if (i == 0) {
+      memcpy(dst + exfi->inode->vsb->block_size * i,
+             content_block + start_offset,
+             exfi->inode->vsb->block_size - start_offset);
+    } else if (i == num_blocks - 1) {
+      memcpy(dst + exfi->inode->vsb->block_size * i, content_block,
+             exfi->inode->vsb->block_size - last_block_end);
+    } else {
+      memcpy(dst + exfi->inode->vsb->block_size * i, content_block,
+             exfi->inode->vsb->block_size);
+    }
+  }
+  return len;
+}
+
+struct File *ext2_file_open(struct Inode *inode) {
+  struct Ext2File *file = kmalloc(sizeof(*file));
+  file->f.read = ext2_file_read;
+  file->inode = (struct Ext2VfsInode *)inode;
+  file->cursor = 0;
+  return (struct File *)file;
 }
 
 void ext2_init() { FS_register(ext2_probe); }

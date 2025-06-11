@@ -19,7 +19,7 @@ struct Inode {
   uid_t st_uid;
   gid_t st_gid;
   off_t st_size;
-  struct File *(*open)(unsigned long inode);
+  struct File *(*open)(struct Inode *inode);
   int (*readdir)(struct Inode *inode, readdir_cb cb, void *p);
   int (*unlink)(struct Inode *inode, const char *name);
 };

@@ -52,10 +52,9 @@ void keyboard_io(void *arg) {
 }
 
 int readdir_printer(const char *filename, struct Inode *inode, void *arg) {
-  struct SuperBlock *sb = (struct SuperBlock *)arg;
-  printk("%s: %u\n", filename, inode->ino);
-  if (filename[0] != '.' && (inode->st_mode & 0x4000)) {
-    sb->root_inode->readdir(inode, &readdir_printer, sb);
+  unsigned long *ino = arg;
+  if (strcmp(filename, "fish1.txt") == 0) {
+    *ino = inode->ino;
   }
   return 1;
 }
@@ -65,13 +64,14 @@ void drive_init(void *arg) {
   struct BlockDevice *dev = ata_probe(PRIM_IO_BASE, PRIM_CTL_BASE, 0, IRQ14);
   struct SuperBlock *sb = FS_probe(dev);
   printk("sb: %lx\n", sb);
-  sb->root_inode->readdir(sb->root_inode, &readdir_printer, sb);
-  /* uint8_t *buf = kmalloc(dev->blk_size); */
-  /* dev->read_block(dev, 0, buf); */
-  /* struct MBR *mbr = kmalloc(sizeof(*mbr)); */
-  /* mbr_init(mbr, dev); */
-  /* printk("Part LBA: %qu\n", mbr->partitions[0].first_sector_lba); */
-  /* printk("Part Size: %qu\n", mbr->partitions[0].num_sectors); */
+  unsigned long ino;
+  sb->root_inode->readdir(sb->root_inode, &readdir_printer, &ino);
+  struct Inode *inode = sb->read_inode(sb, ino);
+  struct File *file = inode->open(inode);
+  char *data = kmalloc(1024);
+  int len = file->read(file, data, 1023);
+  data[len] = '\0';
+  printk("%s\n", data);
 }
 
 void kmain(void) {

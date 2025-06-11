@@ -44,5 +44,16 @@ char *strcpy(char *dest, const char *src) {
   return dest;
 }
 
+#define MIN(a, b) (((a) < (b)) ? (a) : (b))
+
+int strcmp(const char *a, const char *b) {
+  for (size_t i = 0; i < MIN(strlen(a), strlen(b)); ++i) {
+    if (a[i] - b[i] != 0) {
+      return a[i] - b[0];
+    }
+  }
+  return 0;
+}
+
 // I don't wanna write an allocator T^T
 // char *strdup(const char *s);
