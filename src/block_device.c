@@ -37,7 +37,7 @@
 #define STATUS_RDY (1 << 6)
 #define STATUS_BSY (1 << 7)
 
-#define BLOCK_SIZE 256
+#define BLOCK_SIZE 512
 
 void ata_soft_reset(uint16_t ctl_base, bool interrupts) {
   outb(ctl_base + REG_DEV_CTL, 0x4);
@@ -86,8 +86,8 @@ uint64_t dev_identify(uint16_t base) {
     status = inb(base + REG_STATUS);
   }
   assert(!(status & STATUS_ERR) && "Error when reading IDENTIFY data");
-  uint16_t *block = kmalloc(BLOCK_SIZE * sizeof(uint16_t));
-  for (size_t i = 0; i < BLOCK_SIZE; ++i) {
+  uint16_t *block = kmalloc(BLOCK_SIZE);
+  for (size_t i = 0; i < BLOCK_SIZE / sizeof(uint16_t); ++i) {
     block[i] = inw(base + REG_DATA);
   }
   uint64_t sectors = 0;
@@ -171,7 +171,7 @@ int ata_48_read_block(struct BlockDevice *this, uint64_t blk_num, void *dst) {
     ata_req_execute(ata, ata->req_head);
   }
 
-  for (size_t i = 0; i < BLOCK_SIZE; ++i) {
+  for (size_t i = 0; i < ata->dev.blk_size / sizeof(uint16_t); ++i) {
     ((uint16_t *)dst)[i] = inw(ata->ata_base + REG_DATA);
   }
 
@@ -196,7 +196,7 @@ struct BlockDevice *ata_probe(uint16_t base, uint16_t master, uint8_t slave,
   ata->irq = irq;
   PROC_init_queue(&ata->block_queue);
   ata->dev.read_block = &ata_48_read_block;
-  ata->dev.blk_size = 512;
+  ata->dev.blk_size = BLOCK_SIZE;
   ata->dev.tot_length = sectors;
   ata_soft_reset(ata->ata_base, true);
   IRQ_handler_set(IRQ_BASE + IRQ14, &read_block_handler, ata);

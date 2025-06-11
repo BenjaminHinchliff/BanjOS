@@ -17,7 +17,10 @@ set(INCLUDES
   "processes.h"
   "ring_buffer.h"
   "block_device.h"
-  "mbr.h")
+  "mbr.h"
+  "vfs.h"
+  "ext2.h"
+  "fs.h")
 list(TRANSFORM INCLUDES PREPEND ${INCLUDE_PREFIX})
 
 set(SRCS
@@ -37,7 +40,9 @@ set(SRCS
   "processes.c"
   "ring_buffer.c"
   "block_device.c"
-  "mbr.c")
+  "mbr.c"
+  "ext2.c"
+  "fs.c")
 
 set(ASMS
   "boot.asm"

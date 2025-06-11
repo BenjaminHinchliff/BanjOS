@@ -1,5 +1,7 @@
 #include "allocator.h"
 #include "block_device.h"
+#include "ext2.h"
+#include "fs.h"
 #include "gdt.h"
 #include "interrupts.h"
 #include "mbr.h"
@@ -12,6 +14,7 @@
 #include "ps2.h"
 #include "serial.h"
 #include "smolassert.h" // just macros so clangd thinks it's unused
+#include "vfs.h"
 #include "vga.h"
 
 #include <limits.h>
@@ -42,20 +45,23 @@ void test_thread2(void *arg) {
 }
 
 void keyboard_io(void *arg) {
+  ps2_initialize();
   while (true) {
     printk("%c", getc());
   }
 }
 
 void drive_init(void *arg) {
+  ext2_init();
   struct BlockDevice *dev = ata_probe(PRIM_IO_BASE, PRIM_CTL_BASE, 0, IRQ14);
-  BLK_register(dev);
-  uint8_t *buf = kmalloc(dev->blk_size);
-  dev->read_block(dev, 0, buf);
-  struct MBR *mbr = kmalloc(sizeof(*mbr));
-  mbr_init(mbr, dev);
-  printk("Part LBA: %qu\n", mbr->partitions[0].first_sector_lba);
-  printk("Part Size: %qu\n", mbr->partitions[0].num_sectors);
+  struct SuperBlock *sb = FS_probe(dev);
+  printk("sb: %qx\n", sb);
+  /* uint8_t *buf = kmalloc(dev->blk_size); */
+  /* dev->read_block(dev, 0, buf); */
+  /* struct MBR *mbr = kmalloc(sizeof(*mbr)); */
+  /* mbr_init(mbr, dev); */
+  /* printk("Part LBA: %qu\n", mbr->partitions[0].first_sector_lba); */
+  /* printk("Part Size: %qu\n", mbr->partitions[0].num_sectors); */
 }
 
 void kmain(void) {
@@ -75,8 +81,6 @@ void kmain(void) {
   init_page_table();
   MMU_alloc_init();
   init_alloc();
-
-  ps2_initialize();
 
   PROC_create_kthread(&test_thread1, NULL);
   int *fish = kmalloc(sizeof(int));

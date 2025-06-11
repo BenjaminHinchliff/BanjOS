@@ -26,6 +26,9 @@ struct MBR {
   uint16_t boot_signature;
 } __attribute__((packed));
 
+#define MAX_MBR_PARTITIONS                                                     \
+  (sizeof(((struct MBR *)0)->partitions) / sizeof(struct MBRPartition))
+
 _Static_assert(sizeof(struct MBR) == 512, "MBR should be one block in size");
 
 int mbr_init(struct MBR *mbr, struct BlockDevice *dev);
