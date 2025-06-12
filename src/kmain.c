@@ -84,12 +84,12 @@ void drive_init(void *arg) {
   struct Inode *inode = sb->read_inode(sb, ino);
   sb->root_inode->readdir(inode, &readdir_kern, &ino);
   inode = sb->read_inode(sb, ino);
-  struct File *file = inode->open(inode);
   MD5_CTX ctx;
   MD5Init(&ctx);
+  struct File *file = inode->open(inode);
   while (true) {
-    char *data = kmalloc(76800);
-    int len = file->read(file, data, 76800);
+    char *data = kmalloc(7000);
+    int len = file->read(file, data, 7000);
     if (len == 0) {
       break;
     }

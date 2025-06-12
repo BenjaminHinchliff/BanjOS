@@ -318,37 +318,40 @@ struct SuperBlock *ext2_probe(struct BlockDevice *dev) {
 struct Ext2File {
   struct File f;
   struct Ext2VfsInode *inode;
-  uint64_t cursor;
+  int cursor;
 };
 
 int ext2_file_read(struct File *file, char *dst, int len) {
   struct Ext2File *exfi = (struct Ext2File *)file;
-  if (exfi->cursor + len > exfi->inode->in.st_size) {
-    len -= exfi->cursor + len - exfi->inode->in.st_size;
-  }
-  int start_block = exfi->cursor / exfi->inode->vsb->block_size;
-  int start_offset = exfi->cursor % exfi->inode->vsb->block_size;
-  int num_blocks = len / exfi->inode->vsb->block_size +
-                   !!(len % exfi->inode->vsb->block_size);
-  int last_block_end =
-      len - len / exfi->inode->vsb->block_size * exfi->inode->vsb->block_size;
+  int bytes_read = 0;
+  int block = exfi->cursor / exfi->inode->vsb->block_size;
   void *content_block = kmalloc(exfi->inode->vsb->block_size);
-  for (int i = 0; i < num_blocks; ++i) {
-    read_inode_block(exfi->inode, start_block + i, content_block);
-    if (i == 0) {
-      memcpy(dst + exfi->inode->vsb->block_size * i,
-             content_block + start_offset,
+  /* printk("%d, %d\n", start_offset, last_block_end); */
+  while (bytes_read < len && exfi->cursor < exfi->inode->in.st_size) {
+    read_inode_block(exfi->inode, block, content_block);
+    int copied;
+    if (exfi->cursor % exfi->inode->vsb->block_size != 0) {
+      int start_offset = exfi->cursor % exfi->inode->vsb->block_size;
+      memcpy(dst, content_block + start_offset,
              exfi->inode->vsb->block_size - start_offset);
-    } else if (i == num_blocks - 1) {
-      memcpy(dst + exfi->inode->vsb->block_size * i, content_block,
-             exfi->inode->vsb->block_size - last_block_end);
+      copied = exfi->inode->vsb->block_size - start_offset;
+    } else if (bytes_read + exfi->inode->vsb->block_size >= len) {
+      memcpy(dst, content_block, len - bytes_read);
+      copied = len - bytes_read;
+    } else if (exfi->cursor + exfi->inode->vsb->block_size >=
+               exfi->inode->in.st_size) {
+      memcpy(dst, content_block, exfi->inode->in.st_size - exfi->cursor);
+      copied = exfi->inode->in.st_size - exfi->cursor;
     } else {
-      memcpy(dst + exfi->inode->vsb->block_size * i, content_block,
-             exfi->inode->vsb->block_size);
+      memcpy(dst, content_block, exfi->inode->vsb->block_size);
+      copied = exfi->inode->vsb->block_size;
     }
+    bytes_read += copied;
+    exfi->cursor += copied;
+    dst += copied;
+    block += 1;
   }
-  exfi->cursor += len;
-  return len;
+  return bytes_read;
 }
 
 struct File *ext2_file_open(struct Inode *inode) {
