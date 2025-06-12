@@ -21,7 +21,9 @@ set(INCLUDES
   "vfs.h"
   "ext2.h"
   "fs.h"
-  "alignment.h")
+  "alignment.h"
+  "global.h"
+  "md5.h")
 list(TRANSFORM INCLUDES PREPEND ${INCLUDE_PREFIX})
 
 set(SRCS
@@ -43,7 +45,8 @@ set(SRCS
   "block_device.c"
   "mbr.c"
   "ext2.c"
-  "fs.c")
+  "fs.c"
+  "md5.c")
 
 set(ASMS
   "boot.asm"

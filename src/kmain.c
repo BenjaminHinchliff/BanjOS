@@ -5,6 +5,7 @@
 #include "gdt.h"
 #include "interrupts.h"
 #include "mbr.h"
+#include "md5.h"
 #include "multiboot_tags.h"
 #include "page_allocator.h"
 #include "page_table.h"
@@ -51,9 +52,17 @@ void keyboard_io(void *arg) {
   }
 }
 
-int readdir_printer(const char *filename, struct Inode *inode, void *arg) {
+int readdir_boot(const char *filename, struct Inode *inode, void *arg) {
   unsigned long *ino = arg;
-  if (strcmp(filename, "fish1.txt") == 0) {
+  if (strcmp(filename, "boot") == 0) {
+    *ino = inode->ino;
+  }
+  return 1;
+}
+
+int readdir_kern(const char *filename, struct Inode *inode, void *arg) {
+  unsigned long *ino = arg;
+  if (strcmp(filename, "kernel") == 0) {
     *ino = inode->ino;
   }
   return 1;
@@ -65,13 +74,26 @@ void drive_init(void *arg) {
   struct SuperBlock *sb = FS_probe(dev);
   printk("sb: %lx\n", sb);
   unsigned long ino;
-  sb->root_inode->readdir(sb->root_inode, &readdir_printer, &ino);
+  sb->root_inode->readdir(sb->root_inode, &readdir_boot, &ino);
   struct Inode *inode = sb->read_inode(sb, ino);
+  sb->root_inode->readdir(inode, &readdir_kern, &ino);
+  inode = sb->read_inode(sb, ino);
   struct File *file = inode->open(inode);
-  char *data = kmalloc(1024);
-  int len = file->read(file, data, 1023);
-  data[len] = '\0';
-  printk("%s\n", data);
+  char *data = kmalloc(262144);
+  int len = file->read(file, data, 262144);
+  printk("len: %d\n", len);
+  MD5_CTX ctx;
+  MD5Init(&ctx);
+  MD5Update(&ctx, (unsigned char *)data, len);
+  unsigned char digest[16];
+  MD5Final(digest, &ctx);
+  for (int i = 0; i < 16; ++i) {
+    if (digest[i] < 16) {
+      printk("0");
+    }
+    printk("%x", digest[i]);
+  }
+  printk("\n");
 }
 
 void kmain(void) {
