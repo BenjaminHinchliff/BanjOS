@@ -85,11 +85,16 @@ void drive_init(void *arg) {
   sb->root_inode->readdir(inode, &readdir_kern, &ino);
   inode = sb->read_inode(sb, ino);
   struct File *file = inode->open(inode);
-  char *data = kmalloc(262144);
-  int len = file->read(file, data, 262144);
   MD5_CTX ctx;
   MD5Init(&ctx);
-  MD5Update(&ctx, (unsigned char *)data, len);
+  while (true) {
+    char *data = kmalloc(76800);
+    int len = file->read(file, data, 76800);
+    if (len == 0) {
+      break;
+    }
+    MD5Update(&ctx, (unsigned char *)data, len);
+  }
   unsigned char digest[16];
   MD5Final(digest, &ctx);
   for (int i = 0; i < 16; ++i) {

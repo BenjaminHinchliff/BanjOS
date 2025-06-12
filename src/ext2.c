@@ -347,6 +347,7 @@ int ext2_file_read(struct File *file, char *dst, int len) {
              exfi->inode->vsb->block_size);
     }
   }
+  exfi->cursor += len;
   return len;
 }
 
