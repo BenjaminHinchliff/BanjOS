@@ -68,6 +68,12 @@ int readdir_kern(const char *filename, struct Inode *inode, void *arg) {
   return 1;
 }
 
+void spinwaiter(void *arg) {
+  while (true) {
+    yield();
+  }
+}
+
 void drive_init(void *arg) {
   ext2_init();
   struct BlockDevice *dev = ata_probe(PRIM_IO_BASE, PRIM_CTL_BASE, 0, IRQ14);
@@ -81,7 +87,6 @@ void drive_init(void *arg) {
   struct File *file = inode->open(inode);
   char *data = kmalloc(262144);
   int len = file->read(file, data, 262144);
-  printk("len: %d\n", len);
   MD5_CTX ctx;
   MD5Init(&ctx);
   MD5Update(&ctx, (unsigned char *)data, len);
@@ -114,7 +119,7 @@ void kmain(void) {
   MMU_alloc_init();
   init_alloc();
 
-  /* PROC_create_kthread(&test_thread1, NULL); */
+  /* PROC_create_kthread(&spinwaiter, NULL); */
   /* int *fish = kmalloc(sizeof(int)); */
   /* *fish = 420; */
   /* PROC_create_kthread(&test_thread2, &fish); */

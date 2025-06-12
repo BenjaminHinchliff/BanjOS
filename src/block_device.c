@@ -127,6 +127,10 @@ void ata_req_execute(struct ATABlockDevice *ata, struct ATARequest *req) {
   /* printk("next req: %lx\n", ata->req_head); */
   uint16_t sector_count = 1;
   outb(ata->ata_base + REG_DEVSEL, 0x40 | ata->slave << 4);
+  uint8_t status = inb(ata->ata_base + REG_ALT_STS);
+  while (status & STATUS_BSY) {
+    status = inb(ata->ata_base + REG_ALT_STS);
+  }
   outb(ata->ata_base + REG_SEC_CNT, sector_count >> 8);
   outb(ata->ata_base + REG_SEC_NUM, (req->blk_num >> 24) & 0xFF);
   outb(ata->ata_base + REG_CYL_LO, (req->blk_num >> 32) & 0xFF);
@@ -149,8 +153,9 @@ void ata_req_queue_execute(struct ATABlockDevice *ata, struct ATARequest *req) {
 
 void read_block_handler(int number, int error_code, void *arg) {
   struct ATABlockDevice *ata = (struct ATABlockDevice *)arg;
-  if (ata->block_queue.head != NULL) {
-    PROC_unblock_head(&ata->block_queue);
+  (void)inb(ata->ata_base + REG_STATUS);
+  if (ata->req_head->block_queue.head) {
+    PROC_unblock_head(&ata->req_head->block_queue);
   }
   PIC_sendEOI(number);
 }
@@ -159,11 +164,12 @@ int ata_48_read_block(struct BlockDevice *this, uint64_t blk_num, void *dst) {
   struct ATABlockDevice *ata = (struct ATABlockDevice *)this;
   struct ATARequest *req = kmalloc(sizeof(*req));
   req->blk_num = blk_num;
+  PROC_init_queue(&req->block_queue);
+  CLI;
   ata_req_queue_execute(ata, req);
   uint8_t status = inb(ata->ata_master + REG_ALT_STS);
-  CLI;
-  while ((status & STATUS_BSY) && !(status & (STATUS_DRQ | STATUS_ERR))) {
-    PROC_block_on(&ata->block_queue, true);
+  while ((status & STATUS_BSY) || !(status & (STATUS_DRQ | STATUS_ERR))) {
+    PROC_block_on(&ata->req_head->block_queue, true);
     CLI;
     status = inb(ata->ata_master + REG_ALT_STS);
   }
@@ -173,9 +179,9 @@ int ata_48_read_block(struct BlockDevice *this, uint64_t blk_num, void *dst) {
   }
 
   kfree(ata_req_unqueue(ata));
-  if (ata->req_head != NULL) {
-    ata_req_execute(ata, ata->req_head);
-  }
+  /* if (ata->req_head != NULL) { */
+  /*   ata_req_execute(ata, ata->req_head); */
+  /* } */
 
   return 1;
 }
@@ -196,7 +202,6 @@ struct BlockDevice *ata_probe(uint16_t base, uint16_t master, uint8_t slave,
   ata->slave = slave;
   ata->ata_master = master;
   ata->irq = irq;
-  PROC_init_queue(&ata->block_queue);
   ata->dev.read_block = &ata_48_read_block;
   ata->dev.blk_size = BLOCK_SIZE;
   ata->dev.tot_length = sectors;

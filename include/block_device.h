@@ -12,6 +12,7 @@ struct BlockDevice {
 
 struct ATARequest {
   uint64_t blk_num;
+  struct ProcessQueue block_queue;
   struct ATARequest *next;
 };
 
@@ -20,7 +21,6 @@ struct ATABlockDevice {
   uint16_t ata_base, ata_master;
   uint8_t slave, irq;
   struct ATARequest *req_head, *req_tail;
-  struct ProcessQueue block_queue;
 };
 
 #define PRIM_IO_BASE 0x1F0
