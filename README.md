@@ -1,10 +1,19 @@
-# CSC454 OS Project (BanjOS)
+# BanjOS
 
-Model operating system for the CSC454 course at Cal Poly.
+A model x86_64 operating system with minimal features. Originally created for the CSC454 course at Cal Poly.
 
-It's a terrible operating system that at best barely works and is full of race
-conditions because I am a very amazing and careful programmer. Conforms for
-course material up until Ext2 file reading.
+## Features
+
+- [x] long mode booting
+- [x] printing to VGA console
+- [x] interrupt handling
+- [x] interrupt driven keyboard & serial driver
+- [x] physical page frame allocator
+- [x] virtual page allocator and on demand paging
+- [x] kmalloc support (block pool allocator)
+- [x] cooperative multitasking support
+- [x] filesystem reading support (Ext2)
+- [ ] User mode programs (planned)
 
 ## Building
 
@@ -28,3 +37,7 @@ To run the operating system in the QEMU emulator, simply use the run target in t
 ```shell
 make run
 ```
+
+## Known Issues
+
+There are some race conditions related to context switching that need to be ironed out, leading to strange behavior with slow interrupts or when debugging.
